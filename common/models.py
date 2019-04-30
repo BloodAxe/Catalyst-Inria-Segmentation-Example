@@ -14,13 +14,14 @@ from pytorch_toolbelt.modules.unet import UnetCentralBlock, UnetDecoderBlock, Un
 
 
 class FPNSegmentationModel(nn.Module):
-    def __init__(self, encoder: E.EncoderModule, decoder: D.DecoderModule, num_classes: int):
+    def __init__(self, encoder: E.EncoderModule, decoder: D.DecoderModule, num_classes: int, dropout=0.25):
         super().__init__()
 
         self.encoder = encoder
         self.decoder = decoder
 
         self.fpn_fuse = FPNFuse()
+        self.dropout = nn.Dropout2d(dropout, inplace=True)
 
         # Final Classifier
         output_features = sum(self.decoder.output_filters)
@@ -34,6 +35,7 @@ class FPNSegmentationModel(nn.Module):
         dec_features = self.decoder(enc_features)
 
         features = self.fpn_fuse(dec_features)
+        features = self.dropout(features)
 
         logits = self.logits(features)
         logits = F.interpolate(logits, size=(x.size(2), x.size(3)), mode='bilinear', align_corners=True)
