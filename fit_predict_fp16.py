@@ -146,7 +146,7 @@ def main():
     parser.add_argument('-dd', '--data-dir', type=str, required=True, help='Data directory for INRIA sattelite dataset')
     parser.add_argument('-m', '--model', type=str, default='unet', help='')
     parser.add_argument('-b', '--batch-size', type=int, default=8, help='Batch Size during training, e.g. -b 64')
-    parser.add_argument('-e', '--epochs', type=int, default=50, help='Epoch to run')
+    parser.add_argument('-e', '--epochs', type=int, default=150, help='Epoch to run')
     # parser.add_argument('-es', '--early-stopping', type=int, default=None, help='Maximum number of epochs without improvement')
     # parser.add_argument('-fe', '--freeze-encoder', type=int, default=0, help='Freeze encoder parameters for N epochs')
     # parser.add_argument('-ft', '--fine-tune', action='store_true')
@@ -169,11 +169,13 @@ def main():
     optimizer_name = args.optimizer
     image_size = (512, 512)
     fast = args.fast
+    augmentations = args.augmentations
 
     train_loader, valid_loader = get_dataloaders(data_dir=data_dir,
                                                  batch_size=batch_size,
                                                  num_workers=num_workers,
                                                  image_size=image_size,
+                                                 augmentation=augmentations,
                                                  fast=fast)
 
     model = maybe_cuda(get_model(model_name, image_size=image_size))
@@ -184,7 +186,6 @@ def main():
     # for convenient interoperation with argparse.
     model, optimizer = amp.initialize(model, optimizer,
                                       opt_level=args.fp16_opt_level,
-                                      keep_batchnorm_fp32=args.fp16_keep_batchnorm_fp32,
                                       loss_scale=args.fp16_loss_scale)
     # model, optimizer = amp.initialize(model, optimizer, opt_level="O2")
     # model, optimizer = amp.initialize(model, optimizer, opt_level="O2", keep_batchnorm_fp32=True)
@@ -193,7 +194,7 @@ def main():
     loaders["train"] = train_loader
     loaders["valid"] = valid_loader
 
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 20, 40], gamma=0.3)
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 20, 40, 60, 90, 120], gamma=0.3)
 
     # model runner
     runner = SupervisedRunner()
@@ -213,22 +214,23 @@ def main():
     log_dir = os.path.join('runs', prefix)
     os.makedirs(log_dir, exist_ok=False)
 
-    print('Train session:', prefix)
-    print('\tFast mode  :', args.fast)
-    print('\tFP16 mode  :', args.fp16_opt_level)
-    print('\tEpochs     :', num_epochs)
-    print('\tWorkers    :', num_workers)
-    print('\tData dir   :', data_dir)
-    print('\tLog dir    :', log_dir)
-    print('\tTrain size :', len(train_loader), len(train_loader.dataset))
-    print('\tValid size :', len(valid_loader), len(valid_loader.dataset))
-    print('Model:', model_name)
-    print('\tParameters:', count_parameters(model))
-    print('\tImage size:', image_size)
-    print('Optimizer:', optimizer_name)
-    print('\tLearning rate:', learning_rate)
-    print('\tBatch size   :', batch_size)
-    print('\tCriterion    :', args.criterion)
+    print('Train session    :', prefix)
+    print('\tFast mode      :', args.fast)
+    print('\tEpochs         :', num_epochs)
+    print('\tWorkers        :', num_workers)
+    print('\tData dir       :', data_dir)
+    print('\tLog dir        :', log_dir)
+    print('\tAugmentations  :', augmentations)
+    print('\tTrain size     :', len(train_loader), len(train_loader.dataset))
+    print('\tValid size     :', len(valid_loader), len(valid_loader.dataset))
+    print('Model            :', model_name)
+    print('\tParameters     :', count_parameters(model))
+    print('\tImage size     :', image_size)
+    print('Optimizer        :', optimizer_name)
+    print('\tLearning rate  :', learning_rate)
+    print('\tBatch size     :', batch_size)
+    print('\tCriterion      :', args.criterion)
+    print('AMP Model        :', args.fp16_opt_level)
 
     # model training
     runner.train(
