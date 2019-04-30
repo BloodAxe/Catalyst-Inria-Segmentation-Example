@@ -24,7 +24,6 @@ from tqdm import tqdm
 from common.dataset import get_dataloaders
 from common.factory import get_model, get_loss, get_optimizer, visualize_inria_predictions, predict
 
-
 try:
     from apex.parallel import DistributedDataParallel as DDP
     from apex.fp16_utils import *
@@ -32,7 +31,6 @@ try:
     from apex.multi_tensor_apply import multi_tensor_applier
 except ImportError:
     raise ImportError("Please install apex from https://www.github.com/nvidia/apex to run this example.")
-
 
 
 class AmpOptimizerCallback(Callback):
@@ -118,8 +116,6 @@ class AmpOptimizerCallback(Callback):
         optimizer.param_groups[0]["weight_decay"] = self._optimizer_wd
 
 
-
-
 class AmpExperiment(SupervisedExperiment):
 
     def get_callbacks(self, stage: str) -> "List[Callback]":
@@ -139,11 +135,14 @@ class AmpExperiment(SupervisedExperiment):
                     callbacks.append(value())
         return callbacks
 
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--seed', type=int, default=42, help='Random seed')
     parser.add_argument('--fast', action='store_true')
-    # parser.add_argument('--fp16', action='store_true')
+    parser.add_argument('--fp16-opt-level', default='O1')
+    parser.add_argument('--fp16-loss-scale', default=None)
+    parser.add_argument('--fp16-keep-batchnorm-fp32', action='store_true')
     parser.add_argument('-dd', '--data-dir', type=str, required=True, help='Data directory for INRIA sattelite dataset')
     parser.add_argument('-m', '--model', type=str, default='unet', help='')
     parser.add_argument('-b', '--batch-size', type=int, default=8, help='Batch Size during training, e.g. -b 64')
@@ -183,7 +182,12 @@ def main():
 
     # Initialize Amp.  Amp accepts either values or strings for the optional override arguments,
     # for convenient interoperation with argparse.
-    model, optimizer = amp.initialize(model, optimizer, opt_level="O2", keep_batchnorm_fp32=True)
+    model, optimizer = amp.initialize(model, optimizer,
+                                      opt_level=args.fp16_opt_level,
+                                      keep_batchnorm_fp32=args.fp16_keep_batchnorm_fp32,
+                                      loss_scale=args.fp16_loss_scale)
+    # model, optimizer = amp.initialize(model, optimizer, opt_level="O2")
+    # model, optimizer = amp.initialize(model, optimizer, opt_level="O2", keep_batchnorm_fp32=True)
 
     loaders = collections.OrderedDict()
     loaders["train"] = train_loader
@@ -205,12 +209,13 @@ def main():
         print('Metrics:', checkpoint['epoch_metrics'])
 
     current_time = datetime.now().strftime('%b%d_%H_%M')
-    prefix = f'{current_time}_{args.model}_{args.criterion}'
+    prefix = f'{current_time}_{args.model}_fp16_{args.criterion}'
     log_dir = os.path.join('runs', prefix)
     os.makedirs(log_dir, exist_ok=False)
 
     print('Train session:', prefix)
     print('\tFast mode  :', args.fast)
+    print('\tFP16 mode  :', args.fp16_opt_level)
     print('\tEpochs     :', num_epochs)
     print('\tWorkers    :', num_workers)
     print('\tData dir   :', data_dir)
