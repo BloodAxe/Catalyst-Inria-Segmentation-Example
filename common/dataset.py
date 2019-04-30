@@ -92,8 +92,7 @@ def get_dataloaders(data_dir: str,
         ]),
         # Weather effects
         A.OneOf([
-            A.RandomFog(p=0.1),
-            A.RandomRain(p=0.1),
+            A.RandomFog(fog_coef_lower=0.01, fog_coef_upper=0.3, p=0.1),
             A.NoOp()
         ]),
 
