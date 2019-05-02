@@ -149,7 +149,11 @@ def hard_augmentations(image_size, whole_image_input=True, rot_angle=45):
             A.RandomSizedCrop((int(crop_height * 0.5), int(crop_height * 2)), crop_height, crop_width),
 
             # Apply random rotations
-            A.ShiftScaleRotate(shift_limit=0, scale_limit=0, rotate_limit=rot_angle, border_mode=cv2.BORDER_CONSTANT),
+            A.OneOf([
+                A.ShiftScaleRotate(shift_limit=0, scale_limit=0, rotate_limit=rot_angle, border_mode=cv2.BORDER_CONSTANT),
+                A.IAAAffine(shear=0.1, rotate=rot_angle, mode='constant'),
+            ]),
+
             A.OneOf([
                 A.GridDistortion(border_mode=cv2.BORDER_CONSTANT),
                 A.ElasticTransform(alpha_affine=0, border_mode=cv2.BORDER_CONSTANT),
