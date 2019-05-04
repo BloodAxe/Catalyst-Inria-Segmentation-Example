@@ -15,8 +15,9 @@ from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
+from common.ternausnet2 import TernausNetV2
 from .linknet import LinkNet152, LinkNet34
-from .models import fpn128_resnext50, fpn256_resnext50, fpn128_resnet34
+from .models import fpn128_resnext50, fpn256_resnext50, fpn128_resnet34, fpn128_resnet34_v2, fpn128_resnext50_v2
 from .unet import UNet
 
 
@@ -26,8 +27,11 @@ def get_model(model_name: str, image_size=None) -> nn.Module:
         'linknet34': LinkNet34,
         'linknet152': LinkNet152,
         'fpn128_resnet34': fpn128_resnet34,
+        'fpn128_resnet34_v2': fpn128_resnet34_v2,
         'fpn128_resnext50': fpn128_resnext50,
+        'fpn128_resnext50_v2': fpn128_resnext50_v2,
         'fpn256_resnext50': fpn256_resnext50,
+        'ternausnetv2': partial(TernausNetV2, num_input_channels=3, num_classes=1)
     }
 
     return registry[model_name.lower()]()
