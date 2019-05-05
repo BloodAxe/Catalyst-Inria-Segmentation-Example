@@ -157,6 +157,7 @@ def main():
     parser.add_argument('-w', '--workers', default=8, type=int, help='Num workers')
     parser.add_argument('-a', '--augmentations', default='hard', type=str, help='')
     parser.add_argument('-tta', '--tta', default=None, type=str, help='Type of TTA to use [fliplr, d4]')
+    parser.add_argument('-tm', '--train-mode', default='random', type=str, help='')
 
     args = parser.parse_args()
     set_manual_seed(args.seed)
@@ -171,12 +172,14 @@ def main():
     image_size = (512, 512)
     fast = args.fast
     augmentations = args.augmentations
+    train_mode = args.train_mode
 
     train_loader, valid_loader = get_dataloaders(data_dir=data_dir,
                                                  batch_size=batch_size,
                                                  num_workers=num_workers,
                                                  image_size=image_size,
                                                  augmentation=augmentations,
+                                                 train_mode=train_mode,
                                                  fast=fast)
 
     model = maybe_cuda(get_model(model_name, image_size=image_size))
@@ -217,6 +220,7 @@ def main():
 
     print('Train session    :', prefix)
     print('\tFast mode      :', args.fast)
+    print('\tTrain mode     :', train_mode)
     print('\tEpochs         :', num_epochs)
     print('\tWorkers        :', num_workers)
     print('\tData dir       :', data_dir)
