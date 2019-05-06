@@ -1,3 +1,5 @@
+torch>=1.0
 catalyst
 albumentations
-pytorch_toolbelt
+pytorch_toolbelt>=0.0.5
+opencv-python
