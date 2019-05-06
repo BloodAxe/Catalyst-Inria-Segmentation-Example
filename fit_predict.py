@@ -75,7 +75,7 @@ def main():
     loaders["train"] = train_loader
     loaders["valid"] = valid_loader
 
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 20, 40, 60, 90, 120], gamma=0.3)
+    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 20, 40, 60, 90, 120], gamma=0.5)
 
     # model runner
     runner = SupervisedRunner()
