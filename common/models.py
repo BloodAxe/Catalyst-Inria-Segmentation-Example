@@ -60,10 +60,8 @@ class FPNSegmentationModelV2(nn.Module):
         # Final Classifier
         output_features = sum(self.decoder.output_filters)
 
-        self.smooth1 = DoubleConvReluResidual(output_features, output_features // 2)
-        self.smooth2 = DoubleConvReluResidual(output_features // 2, output_features // 4)
-
-        self.logits = nn.Conv2d(output_features // 4, num_classes, kernel_size=1)
+        self.logits = nn.Conv2d(output_features, num_classes, kernel_size=1)
+        self.edges = nn.Conv2d(output_features, num_classes, kernel_size=1)
 
     def forward(self, x):
         x, pad = pad_image_tensor(x, 32)
@@ -74,16 +72,16 @@ class FPNSegmentationModelV2(nn.Module):
         features = self.fpn_fuse(dec_features)
         features = self.dropout(features)
 
-        features = F.interpolate(features, scale_factor=2, mode='bilinear', align_corners=False)
-        features = self.smooth1(features)
+        edges = self.edges(features)
+        logits = self.logits(features) - F.relu(edges)
 
-        features = F.interpolate(features, size=(x.size(2), x.size(3)), mode='bilinear', align_corners=False)
-        features = self.smooth2(features)
-
-        logits = self.logits(features)
+        logits = F.interpolate(logits, size=(x.size(2), x.size(3)), mode='bilinear', align_corners=True)
         logits = unpad_image_tensor(logits, pad)
 
-        return logits
+        edges = F.interpolate(edges, size=(x.size(2), x.size(3)), mode='bilinear', align_corners=True)
+        edges = unpad_image_tensor(edges, pad)
+
+        return {"logits": logits, "edge": edges}
 
     def set_encoder_training_enabled(self, enabled):
         self.encoder.set_trainable(enabled)
@@ -131,6 +129,17 @@ class ConvBNRelu(nn.Module):
         x = self.bn(x)
         x = F.relu(x, inplace=True)
         return x
+
+
+def fpn128_wider_resnet20(num_classes=1, num_channels=3):
+    assert num_channels == 3
+    encoder = E.WiderResnet20A2Encoder(layers=[1, 2, 3, 4, 5])
+    decoder = D.FPNDecoder(features=encoder.output_filters,
+                           prediction_block=DoubleConvRelu,
+                           bottleneck=FPNBottleneckBlockBN,
+                           fpn_features=128)
+
+    return FPNSegmentationModel(encoder, decoder, num_classes)
 
 
 def fpn128_resnet34(num_classes=1, num_channels=3):

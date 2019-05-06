@@ -1,17 +1,20 @@
 import os
+from typing import List, Callable
 
 import math
 import pandas as pd
 import albumentations as A
 import cv2
 import numpy as np
-from pytorch_toolbelt.utils.dataset_utils import TiledImageMaskDataset, ImageMaskDataset
-from pytorch_toolbelt.utils.fs import read_rgb_image, read_image_as_is
-from torch.utils.data import WeightedRandomSampler, DataLoader
+from pytorch_toolbelt.inference.tiles import ImageSlicer
+from pytorch_toolbelt.utils import fs
+from pytorch_toolbelt.utils.torch_utils import tensor_from_rgb_image, tensor_from_mask_image
+from scipy.ndimage import binary_dilation, binary_fill_holes
+from torch.utils.data import WeightedRandomSampler, DataLoader, Dataset, ConcatDataset
 
 
 def read_inria_mask(fname):
-    mask = read_image_as_is(fname)
+    mask = fs.read_image_as_is(fname)
     return (mask > 0).astype(np.uint8)
 
 
@@ -25,6 +28,154 @@ def padding_for_rotation(image_size, rotation):
 
     print('Image padding for rotation', rotation, pad_w, pad_h, r)
     return pad_h, pad_w
+
+
+def compute_boundary_mask(mask: np.ndarray) -> np.ndarray:
+    dilated = binary_dilation(mask, structure=np.ones((5, 5), dtype=np.bool))
+    dilated = binary_fill_holes(dilated)
+
+    diff = dilated & ~mask
+    diff = cv2.dilate(diff, kernel=(5, 5))
+    diff = diff & ~mask
+    return diff.astype(np.uint8)
+
+
+class InriaImageMaskDataset(Dataset):
+    def __init__(self, image_filenames, target_filenames, image_loader, target_loader, transform=None, keep_in_mem=False, use_edges=False):
+        if len(image_filenames) != len(target_filenames):
+            raise ValueError('Number of images does not corresponds to number of targets')
+
+        self.image_ids = [fs.id_from_fname(fname) for fname in image_filenames]
+        self.use_edges = use_edges
+
+        if keep_in_mem:
+            self.images = [image_loader(fname) for fname in image_filenames]
+            self.masks = [target_loader(fname) for fname in target_filenames]
+            self.get_image = lambda x: x
+            self.get_loader = lambda x: x
+        else:
+            self.images = image_filenames
+            self.masks = target_filenames
+            self.get_image = image_loader
+            self.get_loader = target_loader
+
+        self.transform = transform
+
+    def __len__(self):
+        return len(self.images)
+
+    def __getitem__(self, index):
+        image = self.get_image(self.images[index])
+        mask = self.get_loader(self.masks[index])
+
+        data = self.transform(image=image, mask=mask)
+
+        image = data['image']
+        mask = data['mask']
+
+        data = {'features': tensor_from_rgb_image(image),
+                'targets': tensor_from_mask_image(mask).float(),
+                'image_id': self.image_ids[index]}
+
+        if self.use_edges:
+            data['edge'] = tensor_from_mask_image(compute_boundary_mask(mask)).float()
+
+        return data
+
+
+class _InrialTiledImageMaskDataset(Dataset):
+    def __init__(self, image_fname: str,
+                 mask_fname: str,
+                 image_loader: Callable,
+                 target_loader: Callable,
+                 tile_size,
+                 tile_step,
+                 image_margin=0,
+                 transform=None,
+                 target_shape=None,
+                 use_edges=False,
+                 keep_in_mem=False):
+        self.image_fname = image_fname
+        self.mask_fname = mask_fname
+        self.image_loader = image_loader
+        self.mask_loader = target_loader
+        self.image = None
+        self.mask = None
+        self.use_edges = use_edges
+
+        if target_shape is None or keep_in_mem:
+            image = image_loader(image_fname)
+            mask = target_loader(mask_fname)
+            if image.shape[0] != mask.shape[0] or image.shape[1] != mask.shape[1]:
+                raise ValueError(f"Image size {image.shape} and mask shape {image.shape} must have equal width and height")
+
+            target_shape = image.shape
+
+        self.slicer = ImageSlicer(target_shape, tile_size, tile_step, image_margin)
+
+        if keep_in_mem:
+            self.images = self.slicer.split(image)
+            self.masks = self.slicer.split(mask)
+        else:
+            self.images = None
+            self.masks = None
+
+        self.transform = transform
+        self.image_ids = [fs.id_from_fname(image_fname) + f' [{crop[0]};{crop[1]};{crop[2]};{crop[3]};]' for crop in self.slicer.crops]
+
+    def _get_image(self, index):
+        if self.images is None:
+            image = self.image_loader(self.image_fname)
+            image = self.slicer.cut_patch(image, index)
+        else:
+            image = self.images[index]
+        return image
+
+    def _get_mask(self, index):
+        if self.masks is None:
+            mask = self.mask_loader(self.mask_fname)
+            mask = self.slicer.cut_patch(mask, index)
+        else:
+            mask = self.masks[index]
+        return mask
+
+    def __len__(self):
+        return len(self.slicer.crops)
+
+    def __getitem__(self, index):
+        image = self._get_image(index)
+        mask = self._get_mask(index)
+        data = self.transform(image=image, mask=mask)
+
+        image = data['image']
+        mask = data['mask']
+
+        data = {'features': tensor_from_rgb_image(image),
+                'targets': tensor_from_mask_image(mask).float(),
+                'image_id': self.image_ids[index]}
+
+        if self.use_edges:
+            data['edge'] = tensor_from_mask_image(compute_boundary_mask(mask)).float()
+
+        return data
+
+
+class InrialTiledImageMaskDataset(ConcatDataset):
+    def __init__(self,
+                 image_filenames: List[str],
+                 target_filenames: List[str],
+                 image_loader: Callable,
+                 target_loader: Callable,
+                 use_edges=False,
+                 **kwargs):
+        if len(image_filenames) != len(target_filenames):
+            raise ValueError('Number of images does not corresponds to number of targets')
+
+        datasets = []
+        for image, mask in zip(image_filenames, target_filenames):
+            dataset = _InrialTiledImageMaskDataset(image, mask, image_loader, target_loader, use_edges=use_edges, **kwargs)
+            datasets.append(dataset)
+        super().__init__(datasets)
 
 
 def light_augmentations(image_size, whole_image_input=True, rot_angle=5):
@@ -215,6 +366,7 @@ def get_dataloaders(data_dir: str,
                     image_size=(224, 224),
                     augmentation='hard',
                     train_mode='random',
+                    use_edges=False,
                     fast=False):
     """
     Create train and validation data loaders
@@ -223,7 +375,7 @@ def get_dataloaders(data_dir: str,
     :param num_workers:
     :param fast: Fast training model. Use only one image per location for training and one image per location for validation
     :param image_size: Size of image crops during training & validation
-    :param use_d4: Allows use of D4 augmentations for training; if False - will use horisontal flips (D4 may hurt the performance for off-nadir images)
+    :param use_edges: If True, adds 'edge' target mask
     :param augmentation: Type of image augmentations to use
     :param train_mode:
     'random' - crops tiles from source images randomly.
@@ -242,6 +394,8 @@ def get_dataloaders(data_dir: str,
     else:
         assert not is_whole_image_input
         train_transform = A.Normalize()
+
+    valid_transform = A.Normalize()
 
     if train_mode == 'random':
         locations = ['austin', 'chicago', 'kitsap', 'tyrol-w', 'vienna']
@@ -263,19 +417,23 @@ def get_dataloaders(data_dir: str,
         train_mask = [os.path.join(data_dir, 'train', 'gt', f'{fname}.tif') for fname in train_data]
         valid_mask = [os.path.join(data_dir, 'train', 'gt', f'{fname}.tif') for fname in valid_data]
 
-        trainset = ImageMaskDataset(train_img, train_mask, read_rgb_image, read_inria_mask,
-                                    transform=train_transform,
-                                    keep_in_mem=False)
+        trainset = InriaImageMaskDataset(train_img, train_mask, fs.read_rgb_image, read_inria_mask,
+                                         use_edges=use_edges,
+                                         transform=train_transform,
+                                         keep_in_mem=False)
         num_train_samples = int(len(trainset) * (5000 * 5000) / (image_size[0] * image_size[1]))
         train_sampler = WeightedRandomSampler(np.ones(len(trainset)), num_train_samples)
 
-        validset = TiledImageMaskDataset(valid_img, valid_mask, read_rgb_image, read_inria_mask,
-                                         transform=A.Normalize(),
-                                         # For validation we don't want tiles overlap
-                                         tile_size=image_size,
-                                         tile_step=image_size,
-                                         target_shape=(5000, 5000),
-                                         keep_in_mem=False)
+        validset = InrialTiledImageMaskDataset(valid_img, valid_mask,
+                                               use_edges=use_edges,
+                                               image_loader=fs.read_rgb_image,
+                                               target_loader=read_inria_mask,
+                                               transform=valid_transform,
+                                               # For validation we don't want tiles overlap
+                                               tile_size=image_size,
+                                               tile_step=image_size,
+                                               target_shape=(5000, 5000),
+                                               keep_in_mem=False)
 
     elif train_mode == 'tiles':
         inria_tiles = pd.read_csv('inria_tiles.csv')
@@ -286,13 +444,19 @@ def get_dataloaders(data_dir: str,
         valid_img = inria_tiles[inria_tiles['train'] == 0]['image']
         valid_mask = inria_tiles[inria_tiles['train'] == 0]['mask']
 
-        trainset = ImageMaskDataset(train_img, train_mask, read_rgb_image, read_inria_mask,
-                                    transform=train_transform,
-                                    keep_in_mem=False)
+        trainset = InriaImageMaskDataset(train_img, train_mask,
+                                         use_edges=use_edges,
+                                         image_loader=fs.read_rgb_image,
+                                         target_loader=read_inria_mask,
+                                         transform=train_transform,
+                                         keep_in_mem=False)
 
-        validset = ImageMaskDataset(valid_img, valid_mask, read_rgb_image, read_inria_mask,
-                                    transform=train_transform,
-                                    keep_in_mem=False)
+        validset = InriaImageMaskDataset(valid_img, valid_mask,
+                                         use_edges=use_edges,
+                                         image_loader=fs.read_rgb_image,
+                                         target_loader=read_inria_mask,
+                                         transform=valid_transform,
+                                         keep_in_mem=False)
         train_sampler = None
     else:
         raise ValueError(train_mode)
