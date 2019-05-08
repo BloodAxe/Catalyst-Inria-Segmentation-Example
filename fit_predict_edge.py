@@ -45,6 +45,7 @@ def main():
     parser.add_argument('-tta', '--tta', default=None, type=str, help='Type of TTA to use [fliplr, d4]')
     parser.add_argument('-tm', '--train-mode', default='random', type=str, help='')
     parser.add_argument('--run-mode', default='fit_predict', type=str, help='')
+    parser.add_argument('--transfer', default=None, type=str, help='')
 
     args = parser.parse_args()
     set_manual_seed(args.seed)
@@ -67,6 +68,18 @@ def main():
     run_predict = run_mode == 'fit_predict' or run_mode == 'predict'
 
     model = maybe_cuda(get_model(model_name, image_size=image_size))
+
+    if args.transfer:
+        transfer_checkpoint = fs.auto_file(args.transfer)
+        print("Transfering weights from model checkpoint", transfer_checkpoint)
+        checkpoint = UtilsFactory.load_checkpoint(transfer_checkpoint)
+        pretrained_dict = checkpoint['model_state_dict']
+
+        for name, value in pretrained_dict.items():
+            try:
+                model.load_state_dict(collections.OrderedDict([(name, value)]), strict=False)
+            except Exception as e:
+                print(e)
 
     if args.checkpoint:
         checkpoint = UtilsFactory.load_checkpoint(fs.auto_file(args.checkpoint))

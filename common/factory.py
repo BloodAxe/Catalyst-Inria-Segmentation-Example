@@ -18,7 +18,7 @@ from tqdm import tqdm
 
 from common.ternausnet2 import TernausNetV2
 from .linknet import LinkNet152, LinkNet34
-from .models import fpn_v2, fpn_v1
+from .models import fpn_v2, fpn_v1, fpn_v3
 from .unet import UNet
 from pytorch_toolbelt.modules import encoders as E
 
@@ -33,6 +33,7 @@ def get_model(model_name: str, image_size=None) -> nn.Module:
         'fpn256_resnext50': partial(fpn_v1, encoder=E.SEResNeXt50Encoder, fpn_features=256),
         'fpn128_resnext50_v2': partial(fpn_v2, encoder=E.SEResNeXt50Encoder, fpn_features=128),
         'fpn256_resnext50_v2': partial(fpn_v2, encoder=E.SEResNeXt50Encoder, fpn_features=256),
+        'fpn256_resnext50_v3': partial(fpn_v3, encoder=E.SEResNeXt50Encoder, fpn_features=256),
         'fpn256_senet154_v2': partial(fpn_v2, encoder=E.SENet154Encoder, fpn_features=256),
 
         'ternausnetv2': partial(TernausNetV2, num_input_channels=3, num_classes=1),

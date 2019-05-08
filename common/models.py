@@ -89,6 +89,54 @@ class FPNSegmentationModelV2(nn.Module):
         self.encoder.set_trainable(enabled)
 
 
+class FPNSegmentationModelV3(nn.Module):
+    def __init__(self, encoder: E.EncoderModule, decoder: D.DecoderModule, num_classes: int, dropout=0.25):
+        super().__init__()
+
+        self.encoder = encoder
+        self.decoder = decoder
+
+        self.fpn_fuse = FPNFuse()
+        self.dropout = nn.Dropout2d(dropout, inplace=True)
+
+        # Final Classifier
+        output_features = sum(self.decoder.output_filters)
+
+        self.unet1 = UnetEncoderBlock(3, 16)
+        self.unet2 = UnetEncoderBlock(16, 32)
+
+        self.decoder2 = DoubleConvReluResidual(output_features + 32, output_features // 2)
+        self.decoder1 = DoubleConvReluResidual(output_features // 2 + 16, output_features // 2)
+
+        self.logits = nn.Conv2d(output_features // 2, num_classes, kernel_size=1)
+        self.edges = nn.Conv2d(output_features // 2, num_classes, kernel_size=1)
+
+    def forward(self, x):
+        enc_features = self.encoder(x)
+        dec_features = self.decoder(enc_features)
+
+        features = self.fpn_fuse(dec_features)
+        features = self.dropout(features)
+
+        # Compute features for refinement
+        unet1 = self.unet_block1(x)
+        unet2 = self.unet_block2(unet1)
+
+        # Stride 2
+        features = F.interpolate(features, scale_factor=2, mode='bilinear', align_corners=False)
+        features = torch.cat([features, unet2])
+        features = self.decoder2(features)
+
+        # Stride 1
+        features = F.interpolate(features, scale_factor=2, mode='bilinear', align_corners=False)
+        features = torch.cat([features, unet1])
+        features = self.decoder1(features)
+
+        edges = self.edges(features)
+        logits = self.logits(features) - F.relu(edges)
+        return {"logits": logits, "edge": edges}
+
+
 class DoubleConvRelu(nn.Module):
     def __init__(self, in_dec_filters: int, out_filters: int):
         super().__init__()
@@ -151,6 +199,23 @@ def fpn_v1(encoder, num_classes=1, num_channels=3, fpn_features=128):
 
 
 def fpn_v2(encoder, num_classes=1, num_channels=3, fpn_features=128):
+    assert num_channels == 3
+
+    if inspect.isclass(encoder):
+        encoder = encoder()
+    elif isinstance(encoder, LambdaType):
+        encoder = encoder()
+
+    assert isinstance(encoder, E.EncoderModule)
+    decoder = D.FPNDecoder(features=encoder.output_filters,
+                           prediction_block=DoubleConvRelu,
+                           bottleneck=FPNBottleneckBlockBN,
+                           fpn_features=fpn_features)
+
+    return FPNSegmentationModelV2(encoder, decoder, num_classes)
+
+
+def fpn_v3(encoder, num_classes=1, num_channels=3, fpn_features=256):
     assert num_channels == 3
 
     if inspect.isclass(encoder):
