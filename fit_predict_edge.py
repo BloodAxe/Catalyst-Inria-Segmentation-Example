@@ -22,6 +22,7 @@ from tqdm import tqdm
 
 from common.dataset import get_dataloaders
 from common.factory import get_model, get_loss, get_optimizer, visualize_inria_predictions, predict
+from common.metric import JaccardMetricPerImage
 
 
 def main():
@@ -43,6 +44,7 @@ def main():
     parser.add_argument('-a', '--augmentations', default='hard', type=str, help='')
     parser.add_argument('-tta', '--tta', default=None, type=str, help='Type of TTA to use [fliplr, d4]')
     parser.add_argument('-tm', '--train-mode', default='random', type=str, help='')
+    parser.add_argument('--run-mode', default='fit_predict', type=str, help='')
 
     args = parser.parse_args()
     set_manual_seed(args.seed)
@@ -58,108 +60,124 @@ def main():
     fast = args.fast
     augmentations = args.augmentations
     train_mode = args.train_mode
+    run_mode = args.run_mode
+    log_dir = None
 
-    train_loader, valid_loader = get_dataloaders(data_dir=data_dir,
-                                                 batch_size=batch_size,
-                                                 num_workers=num_workers,
-                                                 image_size=image_size,
-                                                 augmentation=augmentations,
-                                                 train_mode=train_mode,
-                                                 fast=fast,
-                                                 use_edges=True)
+    run_train = run_mode == 'fit_predict' or run_mode == 'fit'
+    run_predict = run_mode == 'fit_predict' or run_mode == 'predict'
 
     model = maybe_cuda(get_model(model_name, image_size=image_size))
-    criterion = get_loss(args.criterion)
-    optimizer = get_optimizer(optimizer_name, model.parameters(), learning_rate)
-
-    loaders = collections.OrderedDict()
-    loaders["train"] = train_loader
-    loaders["valid"] = valid_loader
-
-    scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 20, 40, 60, 90, 120], gamma=0.3)
-
-    # model runner
-    runner = SupervisedRunner()
 
     if args.checkpoint:
         checkpoint = UtilsFactory.load_checkpoint(fs.auto_file(args.checkpoint))
         UtilsFactory.unpack_checkpoint(checkpoint, model=model)
 
         checkpoint_epoch = checkpoint['epoch']
-        print('Loaded model weights from', args.checkpoint)
-        print('Epoch   :', checkpoint_epoch)
-        print('Metrics:', checkpoint['epoch_metrics'])
+        print('Loaded model weights from:', args.checkpoint)
+        print('Epoch                    :', checkpoint_epoch)
+        print('Metrics (Train):', 'IoU:', checkpoint['epoch_metrics']['train']['jaccard'], 'Acc:', checkpoint['epoch_metrics']['train']['accuracy'])
+        print('Metrics (Valid):', 'IoU:', checkpoint['epoch_metrics']['valid']['jaccard'], 'Acc:', checkpoint['epoch_metrics']['valid']['accuracy'])
 
-    current_time = datetime.now().strftime('%b%d_%H_%M')
-    prefix = f'{current_time}_{args.model}_{args.criterion}'
-    log_dir = os.path.join('runs', prefix)
-    os.makedirs(log_dir, exist_ok=False)
+        log_dir = os.path.dirname(os.path.dirname(fs.auto_file(args.checkpoint)))
 
-    print('Train session    :', prefix)
-    print('\tFast mode      :', args.fast)
-    print('\tTrain mode     :', train_mode)
-    print('\tEpochs         :', num_epochs)
-    print('\tWorkers        :', num_workers)
-    print('\tData dir       :', data_dir)
-    print('\tLog dir        :', log_dir)
-    print('\tAugmentations  :', augmentations)
-    print('\tTrain size     :', len(train_loader), len(train_loader.dataset))
-    print('\tValid size     :', len(valid_loader), len(valid_loader.dataset))
-    print('Model            :', model_name)
-    print('\tParameters     :', count_parameters(model))
-    print('\tImage size     :', image_size)
-    print('Optimizer        :', optimizer_name)
-    print('\tLearning rate  :', learning_rate)
-    print('\tBatch size     :', batch_size)
-    print('\tCriterion      :', args.criterion)
+    if run_train:
+        criterion = get_loss(args.criterion)
+        optimizer = get_optimizer(optimizer_name, model.parameters(), learning_rate)
 
-    # model training
-    runner.train(
-        model=model,
-        criterion=criterion,
-        optimizer=optimizer,
-        scheduler=scheduler,
-        callbacks=[
-            LossCallback(input_key="targets",
-                         output_key="logits",
-                         prefix="mask",
-                         criterion_key=None,
-                         loss_key=None),
-            LossCallback(input_key="edge",
-                         output_key="edge",
-                         prefix="edge",
-                         criterion_key=None,
-                         loss_key=None),
-            PixelAccuracyMetric(),
-            EpochJaccardMetric(),
-            ShowPolarBatchesCallback(visualize_inria_predictions, metric='accuracy', minimize=False),
-        ],
-        loaders=loaders,
-        logdir=log_dir,
-        num_epochs=num_epochs,
-        verbose=True,
-        main_metric='jaccard',
-        minimize_metric=False,
-        state_kwargs={"cmd_args": vars(args)}
-    )
+        train_loader, valid_loader = get_dataloaders(data_dir=data_dir,
+                                                     batch_size=batch_size,
+                                                     num_workers=num_workers,
+                                                     image_size=image_size,
+                                                     augmentation=augmentations,
+                                                     train_mode=train_mode,
+                                                     fast=fast,
+                                                     use_edges=True)
 
-    best_checkpoint = UtilsFactory.load_checkpoint(fs.auto_file('best.pth', where=log_dir))
-    UtilsFactory.unpack_checkpoint(best_checkpoint, model=model)
+        loaders = collections.OrderedDict()
+        loaders["train"] = train_loader
+        loaders["valid"] = valid_loader
 
-    mask = predict(model, fs.read_rgb_image('sample_color.jpg'), tta=args.tta, image_size=image_size, batch_size=args.batch_size, activation='sigmoid')
-    mask = ((mask > 0.5) * 255).astype(np.uint8)
-    name = os.path.join(log_dir, 'sample_color.jpg')
-    cv2.imwrite(name, mask)
+        current_time = datetime.now().strftime('%b%d_%H_%M')
+        prefix = f'{current_time}_{args.model}_edge_{args.criterion}'
+        log_dir = os.path.join('runs', prefix)
+        os.makedirs(log_dir, exist_ok=False)
 
-    if not args.fast:
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 20, 40, 60, 90, 120], gamma=0.3)
+
+        # model runner
+        runner = SupervisedRunner()
+
+        print('Train session    :', prefix)
+        print('\tFast mode      :', args.fast)
+        print('\tTrain mode     :', train_mode)
+        print('\tEpochs         :', num_epochs)
+        print('\tWorkers        :', num_workers)
+        print('\tData dir       :', data_dir)
+        print('\tLog dir        :', log_dir)
+        print('\tAugmentations  :', augmentations)
+        print('\tTrain size     :', len(train_loader), len(train_loader.dataset))
+        print('\tValid size     :', len(valid_loader), len(valid_loader.dataset))
+        print('Model            :', model_name)
+        print('\tParameters     :', count_parameters(model))
+        print('\tImage size     :', image_size)
+        print('Optimizer        :', optimizer_name)
+        print('\tLearning rate  :', learning_rate)
+        print('\tBatch size     :', batch_size)
+        print('\tCriterion      :', args.criterion)
+
+        # model training
+        runner.train(
+            model=model,
+            criterion=criterion,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            callbacks=[
+                LossCallback(input_key="targets",
+                             output_key="logits",
+                             prefix="mask",
+                             criterion_key=None,
+                             loss_key=None),
+                LossCallback(input_key="edge",
+                             output_key="edge",
+                             prefix="edge",
+                             criterion_key=None,
+                             loss_key=None),
+                PixelAccuracyMetric(),
+                JaccardMetricPerImage(),
+                ShowPolarBatchesCallback(visualize_inria_predictions, metric='accuracy', minimize=False),
+            ],
+            loaders=loaders,
+            logdir=log_dir,
+            num_epochs=num_epochs,
+            verbose=True,
+            main_metric='jaccard',
+            minimize_metric=False,
+            state_kwargs={"cmd_args": vars(args)}
+        )
+
         # Training is finished. Let's run predictions using best checkpoint weights
+        best_checkpoint = UtilsFactory.load_checkpoint(fs.auto_file('best.pth', where=log_dir))
+        UtilsFactory.unpack_checkpoint(best_checkpoint, model=model)
+
+        mask = predict(model, fs.read_rgb_image('sample_color.jpg'), tta=args.tta, image_size=image_size, batch_size=args.batch_size, activation='sigmoid')
+        mask = ((mask > 0.5) * 255).astype(np.uint8)
+        name = os.path.join(log_dir, 'sample_color.jpg')
+        cv2.imwrite(name, mask)
+
+    if run_predict:
+
+        mask = predict(model, fs.read_rgb_image('sample_color.jpg'), tta=args.tta, image_size=image_size, batch_size=args.batch_size, activation='sigmoid')
+        mask = ((mask > 0.5) * 255).astype(np.uint8)
+        name = os.path.join(log_dir, 'sample_color.jpg')
+        cv2.imwrite(name, mask)
+
         out_dir = os.path.join(log_dir, 'submit')
         os.makedirs(out_dir, exist_ok=True)
 
         test_images = fs.find_in_dir(os.path.join(data_dir, 'test', 'images'))
         for fname in tqdm(test_images, total=len(test_images)):
             image = fs.read_rgb_image(fname)
-            mask = predict(model, image, tta=args.tta, image_size=image_size, batch_size=args.batch_size, activation='sigmoid')
+            mask = predict(model, image, tta=args.tta, image_size=image_size, batch_size=args.batch_size, target_key='logits', activation='sigmoid')
             mask = ((mask > 0.5) * 255).astype(np.uint8)
             name = os.path.join(out_dir, os.path.basename(fname))
             cv2.imwrite(name, mask)

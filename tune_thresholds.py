@@ -1,6 +1,6 @@
-from models.factory import optimize_threshold
-
 from pytorch_toolbelt.utils.fs import find_in_dir
+
+from common.factory import optimize_threshold
 
 
 def main():

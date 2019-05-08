@@ -121,7 +121,8 @@ class _InrialTiledImageMaskDataset(Dataset):
             self.masks = None
 
         self.transform = transform
-        self.image_ids = [fs.id_from_fname(image_fname) + f' [{crop[0]};{crop[1]};{crop[2]};{crop[3]};]' for crop in self.slicer.crops]
+        self.image_ids = [fs.id_from_fname(image_fname)] * len(self.slicer.crops)
+        self.crop_coords_str = [f'[{crop[0]};{crop[1]};{crop[2]};{crop[3]};]' for crop in self.slicer.crops]
 
     def _get_image(self, index):
         if self.images is None:
@@ -152,7 +153,8 @@ class _InrialTiledImageMaskDataset(Dataset):
 
         data = {'features': tensor_from_rgb_image(image),
                 'targets': tensor_from_mask_image(mask).float(),
-                'image_id': self.image_ids[index]}
+                'image_id': self.image_ids[index],
+                'crop_coords': self.crop_coords_str[index]}
 
         if self.use_edges:
             data['edge'] = tensor_from_mask_image(compute_boundary_mask(mask)).float()
@@ -367,6 +369,7 @@ def get_dataloaders(data_dir: str,
                     augmentation='hard',
                     train_mode='random',
                     use_edges=False,
+                    sanity_check=False,
                     fast=False):
     """
     Create train and validation data loaders
@@ -405,11 +408,18 @@ def get_dataloaders(data_dir: str,
 
         # For validation, we remove the first five images of every location (e.g., austin{1-5}.tif, chicago{1-5}.tif) from the training set.
         # That is suggested validation strategy by competition host
-        for loc in locations:
-            for i in range(1, 6):
-                valid_data.append(f'{loc}{i}')
-            for i in range(6, 37):
-                train_data.append(f'{loc}{i}')
+
+        if fast:
+            # Fast training model. Use only one image per location for training and one image per location for validation
+            for loc in locations:
+                valid_data.append(f'{loc}1')
+                train_data.append(f'{loc}6')
+        else:
+            for loc in locations:
+                for i in range(1, 6):
+                    valid_data.append(f'{loc}{i}')
+                for i in range(6, 37):
+                    train_data.append(f'{loc}{i}')
 
         train_img = [os.path.join(data_dir, 'train', 'images', f'{fname}.tif') for fname in train_data]
         valid_img = [os.path.join(data_dir, 'train', 'images', f'{fname}.tif') for fname in valid_data]
@@ -461,7 +471,7 @@ def get_dataloaders(data_dir: str,
     else:
         raise ValueError(train_mode)
 
-    if fast:
+    if sanity_check:
         first_batch = [trainset[i] for i in range(batch_size)]
         trainloader = DataLoader(first_batch * 50,
                                  batch_size=batch_size,

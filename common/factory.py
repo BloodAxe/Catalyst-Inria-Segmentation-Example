@@ -8,6 +8,7 @@ import numpy as np
 import torch
 from pytorch_toolbelt.inference.tiles import CudaTileMerger, ImageSlicer
 from pytorch_toolbelt import losses as L
+from pytorch_toolbelt.inference.tta import TTAWrapper, fliplr_image2mask, d4_image2mask
 from pytorch_toolbelt.utils.torch_utils import tensor_from_rgb_image, to_numpy, rgb_image_from_tensor
 from torch import nn
 from torch.nn import BCEWithLogitsLoss
@@ -17,8 +18,9 @@ from tqdm import tqdm
 
 from common.ternausnet2 import TernausNetV2
 from .linknet import LinkNet152, LinkNet34
-from .models import fpn128_resnext50, fpn256_resnext50, fpn128_resnet34, fpn128_resnet34_v2, fpn128_resnext50_v2, fpn128_wider_resnet20
+from .models import fpn_v2, fpn_v1
 from .unet import UNet
+from pytorch_toolbelt.modules import encoders as E
 
 
 def get_model(model_name: str, image_size=None) -> nn.Module:
@@ -26,13 +28,17 @@ def get_model(model_name: str, image_size=None) -> nn.Module:
         'unet': partial(UNet, upsample=False),
         'linknet34': LinkNet34,
         'linknet152': LinkNet152,
-        'fpn128_resnet34': fpn128_resnet34,
-        'fpn128_resnet34_v2': fpn128_resnet34_v2,
-        'fpn128_resnext50': fpn128_resnext50,
-        'fpn128_resnext50_v2': fpn128_resnext50_v2,
-        'fpn256_resnext50': fpn256_resnext50,
+        'fpn128_resnet34': partial(fpn_v1, encoder=E.Resnet34Encoder, fpn_features=128),
+        'fpn128_resnext50': partial(fpn_v1, encoder=E.SEResNeXt50Encoder, fpn_features=128),
+        'fpn256_resnext50': partial(fpn_v1, encoder=E.SEResNeXt50Encoder, fpn_features=256),
+        'fpn128_resnext50_v2': partial(fpn_v2, encoder=E.SEResNeXt50Encoder, fpn_features=128),
+        'fpn256_resnext50_v2': partial(fpn_v2, encoder=E.SEResNeXt50Encoder, fpn_features=256),
+        'fpn256_senet154_v2': partial(fpn_v2, encoder=E.SENet154Encoder, fpn_features=256),
+
         'ternausnetv2': partial(TernausNetV2, num_input_channels=3, num_classes=1),
-        'fpn128_wider_resnet20': fpn128_wider_resnet20
+        'fpn128_wider_resnet20': partial(fpn_v1,
+                                         encoder=lambda _: E.WiderResnet20A2Encoder(layers=[1, 2, 3, 4, 5]),
+                                         fpn_features=128),
     }
 
     return registry[model_name.lower()]()
@@ -85,8 +91,25 @@ def _tensor_from_rgb_image(image: np.ndarray, **kwargs):
     return tensor_from_rgb_image(image)
 
 
-def predict(model: nn.Module, image: np.ndarray, image_size, tta=None, normalize=A.Normalize(), batch_size=1, activation='sigmoid') -> np.ndarray:
+class PickModelOutput(nn.Module):
+    def __init__(self, model, key):
+        super().__init__()
+        self.model = model
+        self.target_key = key
+
+    def forward(self, input):
+        output = self.model(input)
+        return output[self.target_key]
+
+
+def predict(model: nn.Module, image: np.ndarray, image_size, tta=None, normalize=A.Normalize(), batch_size=1,
+            target_key=None,
+            activation='sigmoid') -> np.ndarray:
     model.eval()
+
+    if target_key is not None:
+        model = PickModelOutput(model, target_key)
+
     tile_step = (image_size[0] // 2, image_size[1] // 2)
 
     tile_slicer = ImageSlicer(image.shape, image_size, tile_step, weight='pyramid')
@@ -99,12 +122,10 @@ def predict(model: nn.Module, image: np.ndarray, image_size, tta=None, normalize
     ])
 
     if tta == 'fliplr':
-        model = tta.TTAWrapper(model, tta.fliplr_image2mask)
-        print('Using FlipLR TTA')
+        model = TTAWrapper(model, fliplr_image2mask)
 
     if tta == 'd4':
-        model = tta.TTAWrapper(model, tta.d4_image2mask)
-        print('Using D4 TTA')
+        model = TTAWrapper(model, d4_image2mask)
 
     with torch.no_grad():
         data = list({'image': patch, 'coords': np.array(coords, dtype=np.int)} for (patch, coords) in zip(patches, tile_slicer.crops))

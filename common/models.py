@@ -1,4 +1,6 @@
+import inspect
 from functools import partial
+from types import LambdaType
 
 import torch
 from pytorch_toolbelt.inference.functional import pad_image_tensor, unpad_image_tensor
@@ -131,79 +133,35 @@ class ConvBNRelu(nn.Module):
         return x
 
 
-def fpn128_wider_resnet20(num_classes=1, num_channels=3):
+def fpn_v1(encoder, num_classes=1, num_channels=3, fpn_features=128):
     assert num_channels == 3
-    encoder = E.WiderResnet20A2Encoder(layers=[1, 2, 3, 4, 5])
+    if inspect.isclass(encoder):
+        encoder = encoder()
+    elif isinstance(encoder, LambdaType):
+        encoder = encoder()
+
+    assert isinstance(encoder, E.EncoderModule)
+
     decoder = D.FPNDecoder(features=encoder.output_filters,
                            prediction_block=DoubleConvRelu,
                            bottleneck=FPNBottleneckBlockBN,
-                           fpn_features=128)
+                           fpn_features=fpn_features)
 
     return FPNSegmentationModel(encoder, decoder, num_classes)
 
 
-def fpn128_resnet34(num_classes=1, num_channels=3):
+def fpn_v2(encoder, num_classes=1, num_channels=3, fpn_features=128):
     assert num_channels == 3
-    encoder = E.Resnet34Encoder()
+
+    if inspect.isclass(encoder):
+        encoder = encoder()
+    elif isinstance(encoder, LambdaType):
+        encoder = encoder()
+
+    assert isinstance(encoder, E.EncoderModule)
     decoder = D.FPNDecoder(features=encoder.output_filters,
                            prediction_block=DoubleConvRelu,
                            bottleneck=FPNBottleneckBlockBN,
-                           fpn_features=128)
-
-    return FPNSegmentationModel(encoder, decoder, num_classes)
-
-
-def fpn128_resnet34_v2(num_classes=1, num_channels=3):
-    assert num_channels == 3
-    encoder = E.Resnet34Encoder()
-    decoder = D.FPNDecoder(features=encoder.output_filters,
-                           prediction_block=DoubleConvRelu,
-                           bottleneck=FPNBottleneckBlockBN,
-                           fpn_features=128)
+                           fpn_features=fpn_features)
 
     return FPNSegmentationModelV2(encoder, decoder, num_classes)
-
-
-def fpn128_resnext50(num_classes=1, num_channels=3):
-    assert num_channels == 3
-    encoder = E.SEResNeXt50Encoder()
-    decoder = D.FPNDecoder(features=encoder.output_filters,
-                           prediction_block=DoubleConvRelu,
-                           bottleneck=FPNBottleneckBlockBN,
-                           fpn_features=128)
-
-    return FPNSegmentationModel(encoder, decoder, num_classes)
-
-
-def fpn128_resnext50_v2(num_classes=1, num_channels=3):
-    assert num_channels == 3
-    encoder = E.SEResNeXt50Encoder()
-    decoder = D.FPNDecoder(features=encoder.output_filters,
-                           prediction_block=DoubleConvRelu,
-                           bottleneck=FPNBottleneckBlockBN,
-                           fpn_features=128)
-
-    return FPNSegmentationModelV2(encoder, decoder, num_classes)
-
-
-def fpn256_resnext50(num_classes=1, num_channels=3):
-    assert num_channels == 3
-    encoder = E.SEResNeXt50Encoder()
-    decoder = D.FPNDecoder(features=encoder.output_filters,
-                           prediction_block=DoubleConvRelu,
-                           bottleneck=FPNBottleneckBlockBN,
-                           fpn_features=256)
-
-    return FPNSegmentationModel(encoder, decoder, num_classes)
-
-
-def fpn_senet154(num_classes=1, num_channels=3):
-    assert num_channels == 3
-    encoder = E.SENet154Encoder()
-    decoder = D.FPNDecoder(features=encoder.output_filters,
-                           bottleneck=FPNBottleneckBlockBN,
-                           prediction_block=UnetEncoderBlock,
-                           fpn_features=256,
-                           prediction_features=[128, 256, 512, 768])
-
-    return FPNSegmentationModel(encoder, decoder, num_classes)

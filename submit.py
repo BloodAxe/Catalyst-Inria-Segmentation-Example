@@ -7,7 +7,8 @@ import torch
 from catalyst.dl.utils import UtilsFactory
 from tqdm import tqdm
 from pytorch_toolbelt.utils.fs import auto_file, find_in_dir, read_rgb_image
-from models.factory import get_model, predict
+
+from common.factory import get_model
 
 
 def main():
