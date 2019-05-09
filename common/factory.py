@@ -28,6 +28,7 @@ def get_model(model_name: str, image_size=None) -> nn.Module:
         'unet': partial(UNet, upsample=False),
         'linknet34': LinkNet34,
         'linknet152': LinkNet152,
+        'fpn128_mobilenetv3': partial(fpn_v2, encoder=E.MobilenetV3Encoder, fpn_features=128),
         'fpn128_resnet34': partial(fpn_v1, encoder=E.Resnet34Encoder, fpn_features=128),
         'fpn128_resnext50': partial(fpn_v1, encoder=E.SEResNeXt50Encoder, fpn_features=128),
         'fpn256_resnext50': partial(fpn_v1, encoder=E.SEResNeXt50Encoder, fpn_features=256),
