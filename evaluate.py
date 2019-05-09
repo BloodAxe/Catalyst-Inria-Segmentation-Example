@@ -5,11 +5,12 @@ import cv2
 import numpy as np
 import torch
 from catalyst.dl.utils import UtilsFactory
+
+from common.dataset import read_inria_rgb
 from common.factory import get_model, predict
 from tqdm import tqdm
 
-from pytorch_toolbelt.utils.fs import auto_file, find_in_dir, read_rgb_image
-
+from pytorch_toolbelt.utils.fs import auto_file, find_in_dir
 
 def main():
     parser = argparse.ArgumentParser()
@@ -41,7 +42,7 @@ def main():
 
     train_images = find_in_dir(os.path.join(data_dir, 'train', 'images'))
     for fname in tqdm(train_images, total=len(train_images)):
-        image = read_rgb_image(fname)
+        image = read_inria_rgb(fname)
         mask = predict(model, image, tta=args.tta, image_size=(512, 512), batch_size=args.batch_size, activation='sigmoid')
         mask = (mask * 255).astype(np.uint8)
         name = os.path.join(out_dir, os.path.basename(fname))

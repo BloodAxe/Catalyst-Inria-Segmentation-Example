@@ -13,9 +13,16 @@ from scipy.ndimage import binary_dilation, binary_fill_holes
 from torch.utils.data import WeightedRandomSampler, DataLoader, Dataset, ConcatDataset
 
 
+def read_inria_rgb(fname):
+    image = cv2.imread(fname)
+    cv2.cvtColor(image, code=cv2.COLOR_BGR2RGB, dst=image)
+    return image
+
+
 def read_inria_mask(fname):
     mask = fs.read_image_as_is(fname)
-    return (mask > 0).astype(np.uint8)
+    cv2.threshold(mask, thresh=0, maxval=1, type=cv2.THRESH_BINARY, dst=mask)
+    return mask
 
 
 def padding_for_rotation(image_size, rotation):
@@ -427,7 +434,7 @@ def get_dataloaders(data_dir: str,
         train_mask = [os.path.join(data_dir, 'train', 'gt', f'{fname}.tif') for fname in train_data]
         valid_mask = [os.path.join(data_dir, 'train', 'gt', f'{fname}.tif') for fname in valid_data]
 
-        trainset = InriaImageMaskDataset(train_img, train_mask, fs.read_rgb_image, read_inria_mask,
+        trainset = InriaImageMaskDataset(train_img, train_mask, read_inria_rgb, read_inria_mask,
                                          use_edges=use_edges,
                                          transform=train_transform,
                                          keep_in_mem=False)
@@ -436,7 +443,7 @@ def get_dataloaders(data_dir: str,
 
         validset = InrialTiledImageMaskDataset(valid_img, valid_mask,
                                                use_edges=use_edges,
-                                               image_loader=fs.read_rgb_image,
+                                               image_loader=read_inria_rgb,
                                                target_loader=read_inria_mask,
                                                transform=valid_transform,
                                                # For validation we don't want tiles overlap
@@ -456,14 +463,14 @@ def get_dataloaders(data_dir: str,
 
         trainset = InriaImageMaskDataset(train_img, train_mask,
                                          use_edges=use_edges,
-                                         image_loader=fs.read_rgb_image,
+                                         image_loader=read_inria_rgb,
                                          target_loader=read_inria_mask,
                                          transform=train_transform,
                                          keep_in_mem=False)
 
         validset = InriaImageMaskDataset(valid_img, valid_mask,
                                          use_edges=use_edges,
-                                         image_loader=fs.read_rgb_image,
+                                         image_loader=read_inria_rgb,
                                          target_loader=read_inria_mask,
                                          transform=valid_transform,
                                          keep_in_mem=False)

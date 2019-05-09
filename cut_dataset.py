@@ -2,7 +2,7 @@ import argparse
 
 import cv2, os
 from pytorch_toolbelt.inference.tiles import ImageSlicer
-from pytorch_toolbelt.utils.fs import read_rgb_image, id_from_fname, read_image_as_is
+from pytorch_toolbelt.utils.fs import id_from_fname, read_image_as_is
 import pandas as pd
 from tqdm import tqdm
 
