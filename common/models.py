@@ -183,9 +183,10 @@ class ConvBNRelu(nn.Module):
 
 def fpn_v1(encoder, num_classes=1, num_channels=3, fpn_features=128):
     assert num_channels == 3
+    
     if inspect.isclass(encoder):
         encoder = encoder()
-    elif isinstance(encoder, LambdaType):
+    elif isinstance(encoder, (LambdaType, partial)):
         encoder = encoder()
 
     assert isinstance(encoder, E.EncoderModule)
@@ -203,7 +204,7 @@ def fpn_v2(encoder, num_classes=1, num_channels=3, fpn_features=128):
 
     if inspect.isclass(encoder):
         encoder = encoder()
-    elif isinstance(encoder, LambdaType):
+    elif isinstance(encoder, (LambdaType, partial)):
         encoder = encoder()
 
     assert isinstance(encoder, E.EncoderModule)
@@ -220,7 +221,7 @@ def fpn_v3(encoder, num_classes=1, num_channels=3, fpn_features=256):
 
     if inspect.isclass(encoder):
         encoder = encoder()
-    elif isinstance(encoder, LambdaType):
+    elif isinstance(encoder, (LambdaType, partial)):
         encoder = encoder()
 
     assert isinstance(encoder, E.EncoderModule)
