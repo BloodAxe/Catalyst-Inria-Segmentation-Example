@@ -19,7 +19,7 @@ from torch.backends import cudnn
 from torch.optim import Adam
 from tqdm import tqdm
 
-from common.dataset import get_dataloaders
+from common.dataset import get_dataloaders, read_inria_rgb
 from common.factory import get_model, get_loss, get_optimizer, visualize_inria_predictions, predict
 
 
@@ -146,7 +146,7 @@ def main():
     best_checkpoint = UtilsFactory.load_checkpoint(fs.auto_file('best.pth', where=log_dir))
     UtilsFactory.unpack_checkpoint(best_checkpoint, model=model)
 
-    mask = predict(model, fs.read_rgb_image('sample_color.jpg'), tta=args.tta, image_size=image_size, batch_size=args.batch_size, activation='sigmoid')
+    mask = predict(model, read_inria_rgb('sample_color.jpg'), tta=args.tta, image_size=image_size, batch_size=args.batch_size, activation='sigmoid')
     mask = ((mask > 0.5) * 255).astype(np.uint8)
     name = os.path.join(log_dir, 'sample_color.jpg')
     cv2.imwrite(name, mask)
@@ -158,7 +158,7 @@ def main():
 
         test_images = fs.find_in_dir(os.path.join(data_dir, 'test', 'images'))
         for fname in tqdm(test_images, total=len(test_images)):
-            image = fs.read_rgb_image(fname)
+            image = read_inria_rgb(fname)
             mask = predict(model, image, tta=args.tta, image_size=image_size, batch_size=args.batch_size, activation='sigmoid')
             mask = ((mask > 0.5) * 255).astype(np.uint8)
             name = os.path.join(out_dir, os.path.basename(fname))

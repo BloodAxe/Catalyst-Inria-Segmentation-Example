@@ -6,7 +6,7 @@ import torch
 
 from catalyst.dl.utils import UtilsFactory
 from tqdm import tqdm
-from pytorch_toolbelt.utils.fs import auto_file, find_in_dir, read_rgb_image
+from pytorch_toolbelt.utils.fs import auto_file, find_in_dir
 
 from common.factory import get_model
 
@@ -38,14 +38,14 @@ def main():
 
     model = model.cuda().eval()
 
-    mask = predict(model, read_rgb_image('sample_color.jpg'), tta=args.tta, image_size=(512, 512), batch_size=args.batch_size, activation='sigmoid')
+    mask = predict(model, read_inria_rgb('sample_color.jpg'), tta=args.tta, image_size=(512, 512), batch_size=args.batch_size, activation='sigmoid')
     mask = ((mask > 0.5) * 255).astype(np.uint8)
     name = os.path.join(run_dir, 'sample_color.jpg')
     cv2.imwrite(name, mask)
 
     test_images = find_in_dir(os.path.join(data_dir, 'test', 'images'))
     for fname in tqdm(test_images, total=len(test_images)):
-        image = read_rgb_image(fname)
+        image = read_inria_rgb(fname)
         mask = predict(model, image, tta=args.tta, image_size=(512, 512), batch_size=args.batch_size, activation='sigmoid')
         mask = ((mask > 0.5) * 255).astype(np.uint8)
         name = os.path.join(out_dir, os.path.basename(fname))

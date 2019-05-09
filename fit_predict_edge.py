@@ -9,7 +9,7 @@ import cv2
 import torch
 import numpy as np
 
-from catalyst.dl.callbacks import UtilsFactory, LossCallback
+from catalyst.dl.callbacks import UtilsFactory, LossCallback, EarlyStoppingCallback
 from catalyst.dl.experiments import SupervisedRunner
 from torch.backends import cudnn
 from torch.optim import Adam
@@ -20,7 +20,7 @@ from pytorch_toolbelt.utils.random import set_manual_seed
 from pytorch_toolbelt.utils.torch_utils import maybe_cuda, count_parameters
 from tqdm import tqdm
 
-from common.dataset import get_dataloaders
+from common.dataset import get_dataloaders, read_inria_rgb
 from common.factory import get_model, get_loss, get_optimizer, visualize_inria_predictions, predict
 from common.metric import JaccardMetricPerImage
 
@@ -32,7 +32,7 @@ def main():
     parser.add_argument('-dd', '--data-dir', type=str, required=True, help='Data directory for INRIA sattelite dataset')
     parser.add_argument('-m', '--model', type=str, default='fpn128_resnext50_v2', help='')
     parser.add_argument('-b', '--batch-size', type=int, default=8, help='Batch Size during training, e.g. -b 64')
-    parser.add_argument('-e', '--epochs', type=int, default=150, help='Epoch to run')
+    parser.add_argument('-e', '--epochs', type=int, default=100, help='Epoch to run')
     # parser.add_argument('-es', '--early-stopping', type=int, default=None, help='Maximum number of epochs without improvement')
     # parser.add_argument('-fe', '--freeze-encoder', type=int, default=0, help='Freeze encoder parameters for N epochs')
     # parser.add_argument('-ft', '--fine-tune', action='store_true')
@@ -115,7 +115,7 @@ def main():
         log_dir = os.path.join('runs', prefix)
         os.makedirs(log_dir, exist_ok=False)
 
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 20, 40, 60, 90, 120], gamma=0.3)
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 20, 40, 60, 90], gamma=0.5)
 
         # model runner
         runner = SupervisedRunner()
@@ -158,6 +158,7 @@ def main():
                 PixelAccuracyMetric(),
                 JaccardMetricPerImage(),
                 ShowPolarBatchesCallback(visualize_inria_predictions, metric='accuracy', minimize=False),
+                EarlyStoppingCallback(10, metric='jaccard', minimize=False)
             ],
             loaders=loaders,
             logdir=log_dir,
@@ -172,14 +173,14 @@ def main():
         best_checkpoint = UtilsFactory.load_checkpoint(fs.auto_file('best.pth', where=log_dir))
         UtilsFactory.unpack_checkpoint(best_checkpoint, model=model)
 
-        mask = predict(model, fs.read_rgb_image('sample_color.jpg'), tta=args.tta, image_size=image_size, batch_size=args.batch_size, activation='sigmoid')
+        mask = predict(model, read_inria_rgb('sample_color.jpg'), tta=args.tta, image_size=image_size, batch_size=args.batch_size, activation='sigmoid')
         mask = ((mask > 0.5) * 255).astype(np.uint8)
         name = os.path.join(log_dir, 'sample_color.jpg')
         cv2.imwrite(name, mask)
 
     if run_predict:
 
-        mask = predict(model, fs.read_rgb_image('sample_color.jpg'), tta=args.tta, image_size=image_size, batch_size=args.batch_size, activation='sigmoid')
+        mask = predict(model, read_inria_rgb('sample_color.jpg'), tta=args.tta, image_size=image_size, batch_size=args.batch_size, activation='sigmoid')
         mask = ((mask > 0.5) * 255).astype(np.uint8)
         name = os.path.join(log_dir, 'sample_color.jpg')
         cv2.imwrite(name, mask)
@@ -189,7 +190,7 @@ def main():
 
         test_images = fs.find_in_dir(os.path.join(data_dir, 'test', 'images'))
         for fname in tqdm(test_images, total=len(test_images)):
-            image = fs.read_rgb_image(fname)
+            image = read_inria_rgb(fname)
             mask = predict(model, image, tta=args.tta, image_size=image_size, batch_size=args.batch_size, target_key='logits', activation='sigmoid')
             mask = ((mask > 0.5) * 255).astype(np.uint8)
             name = os.path.join(out_dir, os.path.basename(fname))
