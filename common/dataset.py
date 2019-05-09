@@ -15,7 +15,8 @@ from torch.utils.data import WeightedRandomSampler, DataLoader, Dataset, ConcatD
 
 def read_inria_mask(fname):
     mask = fs.read_image_as_is(fname)
-    return (mask > 0).astype(np.uint8)
+    cv2.threshold(mask, thresh=0, maxval=1, type=cv2.THRESH_BINARY, dst=mask)
+    return mask
 
 
 def padding_for_rotation(image_size, rotation):
