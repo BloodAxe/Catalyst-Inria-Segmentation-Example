@@ -173,14 +173,16 @@ def main():
         best_checkpoint = UtilsFactory.load_checkpoint(fs.auto_file('best.pth', where=log_dir))
         UtilsFactory.unpack_checkpoint(best_checkpoint, model=model)
 
-        mask = predict(model, read_inria_rgb('sample_color.jpg'), tta=args.tta, image_size=image_size, batch_size=args.batch_size, activation='sigmoid')
+        mask = predict(model, read_inria_rgb('sample_color.jpg'), tta=args.tta, image_size=image_size, target_key='logits', batch_size=args.batch_size,
+                       activation='sigmoid')
         mask = ((mask > 0.5) * 255).astype(np.uint8)
         name = os.path.join(log_dir, 'sample_color.jpg')
         cv2.imwrite(name, mask)
 
     if run_predict:
 
-        mask = predict(model, read_inria_rgb('sample_color.jpg'), tta=args.tta, image_size=image_size, batch_size=args.batch_size, activation='sigmoid')
+        mask = predict(model, read_inria_rgb('sample_color.jpg'), tta=args.tta, image_size=image_size, target_key='logits', batch_size=args.batch_size,
+                       activation='sigmoid')
         mask = ((mask > 0.5) * 255).astype(np.uint8)
         name = os.path.join(log_dir, 'sample_color.jpg')
         cv2.imwrite(name, mask)
