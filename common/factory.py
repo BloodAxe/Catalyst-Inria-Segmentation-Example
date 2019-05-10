@@ -36,7 +36,7 @@ def get_model(model_name: str, image_size=None) -> nn.Module:
         'fpn128_resnext50_v2': partial(fpn_v2, encoder=E.SEResNeXt50Encoder, fpn_features=128),
         'fpn256_resnext50_v2': partial(fpn_v2, encoder=E.SEResNeXt50Encoder, fpn_features=256),
         'fpn256_resnext50_v3': partial(fpn_v3, encoder=E.SEResNeXt50Encoder, fpn_features=256),
-        'fpn256_senet154_v2': partial(fpn_v2, encoder=E.SENet154Encoder, fpn_features=256),
+        'fpn512_senet154_v2': partial(fpn_v2, encoder=E.SENet154Encoder, fpn_features=512),
 
         'ternausnetv2': partial(TernausNetV2, num_input_channels=3, num_classes=1),
         'fpn128_wider_resnet20': partial(fpn_v1,
