@@ -102,6 +102,8 @@ class FPNSegmentationModelV3(nn.Module):
         # Final Classifier
         output_features = sum(self.decoder.output_filters)
 
+        self.coarse_logits = nn.Conv2d(output_features, num_classes, kernel_size=1)
+
         self.unet1 = UnetEncoderBlock(3, 16)
         self.unet2 = UnetEncoderBlock(16, 32)
 
@@ -117,6 +119,8 @@ class FPNSegmentationModelV3(nn.Module):
 
         features = self.fpn_fuse(dec_features)
         features = self.dropout(features)
+
+        coarse_logits = self.coarse_logits(features)
 
         # Compute features for refinement
         unet1 = self.unet_block1(x)
@@ -134,7 +138,7 @@ class FPNSegmentationModelV3(nn.Module):
 
         edges = self.edges(features)
         logits = self.logits(features) - F.relu(edges)
-        return {"logits": logits, "edge": edges}
+        return {"logits": logits, "edge": edges, "coarse_logits": coarse_logits}
 
 
 class DoubleConvRelu(nn.Module):
@@ -183,7 +187,7 @@ class ConvBNRelu(nn.Module):
 
 def fpn_v1(encoder, num_classes=1, num_channels=3, fpn_features=128):
     assert num_channels == 3
-    
+
     if inspect.isclass(encoder):
         encoder = encoder()
     elif isinstance(encoder, (LambdaType, partial)):
@@ -230,4 +234,4 @@ def fpn_v3(encoder, num_classes=1, num_channels=3, fpn_features=256):
                            bottleneck=FPNBottleneckBlockBN,
                            fpn_features=fpn_features)
 
-    return FPNSegmentationModelV2(encoder, decoder, num_classes)
+    return FPNSegmentationModelV3(encoder, decoder, num_classes)
