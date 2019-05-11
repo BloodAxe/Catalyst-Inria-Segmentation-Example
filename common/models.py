@@ -104,14 +104,18 @@ class FPNSegmentationModelV3(nn.Module):
 
         self.coarse_logits = nn.Conv2d(output_features, num_classes, kernel_size=1)
 
+        bottleneck = 64
+
         self.unet1 = UnetEncoderBlock(3, 16)
-        self.unet2 = UnetEncoderBlock(16, 32)
+        self.unet2 = UnetEncoderBlock(16, 32, stride=2)
 
-        self.decoder2 = DoubleConvReluResidual(output_features + 32, output_features // 2)
-        self.decoder1 = DoubleConvReluResidual(output_features // 2 + 16, output_features // 2)
+        self.last_bottleneck = nn.Conv2d(output_features, bottleneck, kernel_size=1)
 
-        self.logits = nn.Conv2d(output_features // 2, num_classes, kernel_size=1)
-        self.edges = nn.Conv2d(output_features // 2, num_classes, kernel_size=1)
+        self.decoder2 = DoubleConvReluResidual(bottleneck + 32, bottleneck)
+        self.decoder1 = DoubleConvReluResidual(bottleneck + 16, bottleneck)
+
+        self.logits = nn.Conv2d(bottleneck, num_classes, kernel_size=1)
+        self.edges = nn.Conv2d(bottleneck, num_classes, kernel_size=1)
 
     def forward(self, x):
         enc_features = self.encoder(x)
@@ -123,17 +127,19 @@ class FPNSegmentationModelV3(nn.Module):
         coarse_logits = self.coarse_logits(features)
 
         # Compute features for refinement
-        unet1 = self.unet_block1(x)
-        unet2 = self.unet_block2(unet1)
+        unet1 = self.unet1(x)
+        unet2 = self.unet2(unet1)
+
+        features = self.last_bottleneck(features)
 
         # Stride 2
         features = F.interpolate(features, scale_factor=2, mode='bilinear', align_corners=False)
-        features = torch.cat([features, unet2])
+        features = torch.cat([features, unet2], dim=1)
         features = self.decoder2(features)
 
         # Stride 1
         features = F.interpolate(features, scale_factor=2, mode='bilinear', align_corners=False)
-        features = torch.cat([features, unet1])
+        features = torch.cat([features, unet1], dim=1)
         features = self.decoder1(features)
 
         edges = self.edges(features)
@@ -185,7 +191,7 @@ class ConvBNRelu(nn.Module):
         return x
 
 
-def fpn_v1(encoder, num_classes=1, num_channels=3, fpn_features=128):
+def fpn_v1(encoder, num_classes=1, num_channels=3, bottleneck_features=256, fpn_features=128):
     assert num_channels == 3
 
     if inspect.isclass(encoder):
@@ -198,12 +204,13 @@ def fpn_v1(encoder, num_classes=1, num_channels=3, fpn_features=128):
     decoder = D.FPNDecoder(features=encoder.output_filters,
                            prediction_block=DoubleConvRelu,
                            bottleneck=FPNBottleneckBlockBN,
-                           fpn_features=fpn_features)
+                           fpn_features=bottleneck_features,
+                           prediction_features=fpn_features)
 
     return FPNSegmentationModel(encoder, decoder, num_classes)
 
 
-def fpn_v2(encoder, num_classes=1, num_channels=3, fpn_features=128):
+def fpn_v2(encoder, num_classes=1, num_channels=3, bottleneck_features=256, prediction_features=128):
     assert num_channels == 3
 
     if inspect.isclass(encoder):
@@ -215,12 +222,13 @@ def fpn_v2(encoder, num_classes=1, num_channels=3, fpn_features=128):
     decoder = D.FPNDecoder(features=encoder.output_filters,
                            prediction_block=DoubleConvRelu,
                            bottleneck=FPNBottleneckBlockBN,
-                           fpn_features=fpn_features)
+                           fpn_features=bottleneck_features,
+                           prediction_features=prediction_features)
 
     return FPNSegmentationModelV2(encoder, decoder, num_classes)
 
 
-def fpn_v3(encoder, num_classes=1, num_channels=3, fpn_features=256):
+def fpn_v3(encoder, num_classes=1, num_channels=3, bottleneck_features=256, prediction_features=256):
     assert num_channels == 3
 
     if inspect.isclass(encoder):
@@ -232,6 +240,7 @@ def fpn_v3(encoder, num_classes=1, num_channels=3, fpn_features=256):
     decoder = D.FPNDecoder(features=encoder.output_filters,
                            prediction_block=DoubleConvRelu,
                            bottleneck=FPNBottleneckBlockBN,
-                           fpn_features=fpn_features)
+                           prediction_features=prediction_features,
+                           fpn_features=bottleneck_features)
 
     return FPNSegmentationModelV3(encoder, decoder, num_classes)
