@@ -80,8 +80,13 @@ class InriaImageMaskDataset(Dataset):
         image = data['image']
         mask = data['mask']
 
+        coarse_mask = cv2.resize(mask,
+                                 dsize=(mask.shape[1] // 4, mask.shape[0] // 4),
+                                 interpolation=cv2.INTER_LINEAR)
+
         data = {'features': tensor_from_rgb_image(image),
                 'targets': tensor_from_mask_image(mask).float(),
+                'coarse_targets': tensor_from_mask_image(coarse_mask).float(),
                 'image_id': self.image_ids[index]}
 
         if self.use_edges:
@@ -157,9 +162,13 @@ class _InrialTiledImageMaskDataset(Dataset):
 
         image = data['image']
         mask = data['mask']
+        coarse_mask = cv2.resize(mask,
+                                 dsize=(mask.shape[1] // 4, mask.shape[0] // 4),
+                                 interpolation=cv2.INTER_LINEAR)
 
         data = {'features': tensor_from_rgb_image(image),
                 'targets': tensor_from_mask_image(mask).float(),
+                'coarse_targets': tensor_from_mask_image(coarse_mask).float(),
                 'image_id': self.image_ids[index],
                 'crop_coords': self.crop_coords_str[index]}
 

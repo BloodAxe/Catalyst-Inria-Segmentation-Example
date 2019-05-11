@@ -63,9 +63,9 @@ class JaccardMetricPerImage(Callback):
         metric = float(np.mean(ious_per_image))
         state.metrics.epoch_values[state.loader_name][metric_name] = metric
 
-        logger = _get_tensorboard_logger(state)
-        logger.add_scalar(f"{self.prefix}/all", metric, global_step=state.epoch)
+        # logger = _get_tensorboard_logger(state)
+        # logger.add_scalar(f"{self.prefix}/all", metric, global_step=state.epoch)
 
         for location, ious in ious_per_location.items():
             state.metrics.epoch_values[state.loader_name][f'{self.prefix}_{location}'] = float(np.mean(ious))
-            logger.add_scalar(f"{self.prefix}/{location}", metric, global_step=state.epoch)
+            # logger.add_scalar(f"{self.prefix}/{location}", metric, global_step=state.epoch)
