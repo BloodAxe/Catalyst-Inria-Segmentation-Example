@@ -184,7 +184,7 @@ def main():
         name = os.path.join(log_dir, 'sample_color.jpg')
         cv2.imwrite(name, mask)
 
-    if run_predict:
+    if run_predict and not fast:
 
         mask = predict(model, read_inria_rgb('sample_color.jpg'), tta=args.tta, image_size=image_size, target_key='logits', batch_size=args.batch_size,
                        activation='sigmoid')

@@ -6,6 +6,9 @@ import torch
 from pytorch_toolbelt.inference.functional import pad_image_tensor, unpad_image_tensor
 from pytorch_toolbelt.modules import encoders as E
 from pytorch_toolbelt.modules import decoders as D
+from pytorch_toolbelt.modules.backbone.senet import SEResNeXtBottleneck
+from pytorch_toolbelt.modules.dsconv import DepthwiseSeparableConv2d
+from pytorch_toolbelt.modules.scse import ChannelSpatialGate2d, ChannelSpatialGate2dV2
 from pytorch_toolbelt.modules.abn import ACT_SELU
 from pytorch_toolbelt.modules.fpn import FPNFuse, FPNBottleneckBlockBN
 from pytorch_toolbelt.utils.torch_utils import count_parameters
@@ -105,14 +108,13 @@ class FPNSegmentationModelV3(nn.Module):
         self.coarse_logits = nn.Conv2d(output_features, num_classes, kernel_size=1)
 
         bottleneck = 64
-
-        self.unet1 = UnetEncoderBlock(3, 16)
-        self.unet2 = UnetEncoderBlock(16, 32, stride=2)
+        # self.unet1 = UnetEncoderBlock(3, 16)
+        # self.unet2 = UnetEncoderBlock(16, 32, stride=2)
 
         self.last_bottleneck = nn.Conv2d(output_features, bottleneck, kernel_size=1)
 
-        self.decoder2 = DoubleConvReluResidual(bottleneck + 32, bottleneck)
-        self.decoder1 = DoubleConvReluResidual(bottleneck + 16, bottleneck)
+        self.decoder2 = DoubleConvReluResidual(bottleneck, bottleneck)
+        self.decoder1 = DoubleConvReluResidual(bottleneck, bottleneck)
 
         self.logits = nn.Conv2d(bottleneck, num_classes, kernel_size=1)
         self.edges = nn.Conv2d(bottleneck, num_classes, kernel_size=1)
@@ -127,19 +129,19 @@ class FPNSegmentationModelV3(nn.Module):
         coarse_logits = self.coarse_logits(features)
 
         # Compute features for refinement
-        unet1 = self.unet1(x)
-        unet2 = self.unet2(unet1)
+        # unet1 = self.unet1(x)
+        # unet2 = self.unet2(unet1)
 
         features = self.last_bottleneck(features)
 
         # Stride 2
         features = F.interpolate(features, scale_factor=2, mode='bilinear', align_corners=False)
-        features = torch.cat([features, unet2], dim=1)
+        # features = torch.cat([features, unet2], dim=1)
         features = self.decoder2(features)
 
         # Stride 1
         features = F.interpolate(features, scale_factor=2, mode='bilinear', align_corners=False)
-        features = torch.cat([features, unet1], dim=1)
+        # features = torch.cat([features, unet1], dim=1)
         features = self.decoder1(features)
 
         edges = self.edges(features)
@@ -164,17 +166,19 @@ class DoubleConvRelu(nn.Module):
 class DoubleConvReluResidual(nn.Module):
     def __init__(self, in_dec_filters: int, out_filters: int):
         super().__init__()
-        self.conv1 = nn.Conv2d(in_dec_filters, out_filters, kernel_size=3, padding=1, stride=1)
-        self.conv2 = nn.Conv2d(out_filters, out_filters, kernel_size=3, padding=1, stride=1)
+        self.bn = nn.BatchNorm2d(out_filters)
+        self.conv1 = DepthwiseSeparableConv2d(in_dec_filters, out_filters, kernel_size=3, padding=1, stride=1)
+        self.conv2 = DepthwiseSeparableConv2d(out_filters, out_filters, kernel_size=3, padding=1, stride=1)
         self.residual = nn.Conv2d(in_dec_filters, out_filters, kernel_size=1)
 
     def forward(self, x):
         residual = self.residual(x)
+        residual = self.bn(residual)
 
         x = self.conv1(x)
-        x = F.relu(x, inplace=True)
+        x = F.leaky_relu(x, inplace=True)
         x = self.conv2(x)
-        x = F.relu(x, inplace=True)
+        x = F.leaky_relu(x, inplace=True)
         return x + residual
 
 
@@ -228,6 +232,37 @@ def fpn_v2(encoder, num_classes=1, num_channels=3, bottleneck_features=256, pred
     return FPNSegmentationModelV2(encoder, decoder, num_classes)
 
 
+class FPNBottleneckSE(nn.Module):
+    def __init__(self, input_filters, output_filters):
+        super().__init__()
+        assert input_filters == output_filters
+        self.block1 = SEResNeXtBottleneck(input_filters, input_filters // 4, reduction=8, groups=1)
+        self.block2 = SEResNeXtBottleneck(input_filters, input_filters // 4, reduction=8, groups=1)
+
+    def forward(self, x):
+        x = self.block1(x)
+        x = self.block2(x)
+        return x
+
+
+def fpn_v2_se(encoder, num_classes=1, num_channels=3, bottleneck_features=256, prediction_features=128):
+    assert num_channels == 3
+
+    if inspect.isclass(encoder):
+        encoder = encoder()
+    elif isinstance(encoder, (LambdaType, partial)):
+        encoder = encoder()
+
+    assert isinstance(encoder, E.EncoderModule)
+    decoder = D.FPNDecoder(features=encoder.output_filters,
+                           prediction_block=FPNBottleneckSE,
+                           bottleneck=FPNBottleneckBlockBN,
+                           fpn_features=bottleneck_features,
+                           prediction_features=prediction_features)
+
+    return FPNSegmentationModelV2(encoder, decoder, num_classes)
+
+
 def fpn_v3(encoder, num_classes=1, num_channels=3, bottleneck_features=256, prediction_features=256):
     assert num_channels == 3
 
@@ -238,7 +273,7 @@ def fpn_v3(encoder, num_classes=1, num_channels=3, bottleneck_features=256, pred
 
     assert isinstance(encoder, E.EncoderModule)
     decoder = D.FPNDecoder(features=encoder.output_filters,
-                           prediction_block=DoubleConvRelu,
+                           prediction_block=lambda input_filters, output_filters: SEResNeXtBottleneck(input_filters, output_filters // 4, reduction=4, groups=1),
                            bottleneck=FPNBottleneckBlockBN,
                            prediction_features=prediction_features,
                            fpn_features=bottleneck_features)
