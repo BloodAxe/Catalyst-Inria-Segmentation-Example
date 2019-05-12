@@ -72,10 +72,13 @@ def get_loss(loss_name: str, **kwargs):
         return L.BinaryFocalLoss(alpha=None, gamma=1.5, reduced=True, **kwargs)
 
     if loss_name.lower() == 'bce_jaccard':
+        return L.JointLoss(first=BCEWithLogitsLoss(), second=L.BinaryJaccardLoss(), first_weight=1.0, second_weight=0.5)
+
+    if loss_name.lower() == 'bce_log_jaccard':
         return L.JointLoss(first=BCEWithLogitsLoss(), second=L.BinaryJaccardLogLoss(), first_weight=1.0, second_weight=0.5)
 
     if loss_name.lower() == 'bce_lovasz':
-        return L.JointLoss(first=BCEWithLogitsLoss(), second=L.BinaryLovaszLoss(), first_weight=1.0, second_weight=0.5)
+        return L.JointLoss(first=BCEWithLogitsLoss(), second=L.BinaryLovaszLoss(), first_weight=1.0, second_weight=0.25)
 
     raise KeyError(loss_name)
 
