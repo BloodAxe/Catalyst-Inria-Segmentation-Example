@@ -18,7 +18,7 @@ from tqdm import tqdm
 
 from common.ternausnet2 import TernausNetV2
 from .linknet import LinkNet152, LinkNet34
-from .models import fpn_v2, fpn_v1, fpn_v3
+from .models import fpn_v2, fpn_v1, fpn_v3, fpn_v2_se
 from .unet import UNet
 from pytorch_toolbelt.modules import encoders as E
 
@@ -35,6 +35,7 @@ def get_model(model_name: str, image_size=None) -> nn.Module:
         'fpn256_resnext50': partial(fpn_v1, encoder=E.SEResNeXt50Encoder, prediction_features=256),
         'fpn128_resnext50_v2': partial(fpn_v2, encoder=E.SEResNeXt50Encoder, prediction_features=128),
         'fpn256_resnext50_v2': partial(fpn_v2, encoder=E.SEResNeXt50Encoder, prediction_features=256),
+        'fpn256_resnext50_v2_se': partial(fpn_v2_se, encoder=E.SEResNeXt50Encoder, bottleneck_features=256, prediction_features=256),
         'fpn256_resnext50_v3': partial(fpn_v3, encoder=E.SEResNeXt50Encoder, bottleneck_features=512, prediction_features=256),
         # 'fpn256_senet154_v2': partial(fpn_v2, encoder=E.SENet154Encoder, prediction_features=384),
         'fpn256_senet154_v2': partial(fpn_v2, encoder=E.SENet154Encoder, prediction_features=256),
@@ -73,8 +74,11 @@ def get_loss(loss_name: str, **kwargs):
     if loss_name.lower() == 'bce_jaccard':
         return L.JointLoss(first=BCEWithLogitsLoss(), second=L.BinaryJaccardLoss(), first_weight=1.0, second_weight=0.5)
 
+    if loss_name.lower() == 'bce_log_jaccard':
+        return L.JointLoss(first=BCEWithLogitsLoss(), second=L.BinaryJaccardLogLoss(), first_weight=1.0, second_weight=0.5)
+
     if loss_name.lower() == 'bce_lovasz':
-        return L.JointLoss(first=BCEWithLogitsLoss(), second=L.BinaryLovaszLoss(), first_weight=1.0, second_weight=0.5)
+        return L.JointLoss(first=BCEWithLogitsLoss(), second=L.BinaryLovaszLoss(), first_weight=1.0, second_weight=0.25)
 
     raise KeyError(loss_name)
 
