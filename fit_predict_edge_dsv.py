@@ -162,6 +162,7 @@ def main():
                              loss_key=None),
                 PixelAccuracyMetric(),
                 JaccardMetricPerImage(),
+                OptimalThreshold(),
                 ShowPolarBatchesCallback(visualize_inria_predictions, metric='accuracy', minimize=False),
                 EarlyStoppingCallback(10, metric='jaccard', minimize=False)
             ],
@@ -169,7 +170,7 @@ def main():
             logdir=log_dir,
             num_epochs=num_epochs,
             verbose=True,
-            main_metric='jaccard',
+            main_metric='optimal_threshold/iou',
             minimize_metric=False,
             state_kwargs={"cmd_args": vars(args)}
         )
