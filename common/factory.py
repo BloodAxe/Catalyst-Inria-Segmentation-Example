@@ -18,7 +18,7 @@ from tqdm import tqdm
 
 from common.ternausnet2 import TernausNetV2
 from .linknet import LinkNet152, LinkNet34
-from .models import fpn_v2, fpn_v1, fpn_v3, fpn_v2_se
+from .models import fpn_v2, fpn_v1, fpn_v3
 from .unet import UNet
 from pytorch_toolbelt.modules import encoders as E
 
