@@ -22,7 +22,7 @@ from tqdm import tqdm
 
 from common.dataset import get_dataloaders, read_inria_rgb
 from common.factory import get_model, get_loss, get_optimizer, visualize_inria_predictions, predict
-from common.metric import JaccardMetricPerImage, OptimalThreshold
+from common.metric import JaccardMetricPerImage
 
 
 def main():
@@ -159,7 +159,7 @@ def main():
                 JaccardMetricPerImage(),
                 OptimalThreshold(),
                 ShowPolarBatchesCallback(visualize_inria_predictions, metric='accuracy', minimize=False),
-                EarlyStoppingCallback(10, metric='jaccard', minimize=False),
+                EarlyStoppingCallback(10, metric='jaccard', minimize=False)
             ],
             loaders=loaders,
             logdir=log_dir,
@@ -180,7 +180,7 @@ def main():
         name = os.path.join(log_dir, 'sample_color.jpg')
         cv2.imwrite(name, mask)
 
-    if run_predict:
+    if run_predict and not fast:
 
         mask = predict(model, read_inria_rgb('sample_color.jpg'), tta=args.tta, image_size=image_size, target_key='logits', batch_size=args.batch_size,
                        activation='sigmoid')
