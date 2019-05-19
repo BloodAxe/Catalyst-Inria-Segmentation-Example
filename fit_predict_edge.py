@@ -97,6 +97,13 @@ def main():
         criterion = get_loss(args.criterion)
         optimizer = get_optimizer(optimizer_name, model.parameters(), learning_rate)
 
+        try:
+            if args.checkpoint:
+                checkpoint = UtilsFactory.load_checkpoint(fs.auto_file(args.checkpoint))
+                UtilsFactory.unpack_checkpoint(checkpoint, optimizer=optimizer)
+        except RuntimeError as e:
+            print(e)
+
         train_loader, valid_loader = get_dataloaders(data_dir=data_dir,
                                                      batch_size=batch_size,
                                                      num_workers=num_workers,
