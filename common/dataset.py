@@ -419,7 +419,12 @@ def get_dataloaders(data_dir: str,
     if train_mode == 'random':
         locations = ['austin', 'chicago', 'kitsap', 'tyrol-w', 'vienna']
 
+        # Empirical weights for regions (for oversampling hard regions)
+        # locations_weights = [1, 2, 3, 1, 1]
+        locations_weights = [1, 1, 1, 1, 1]
+
         train_data = []
+        train_data_weights = []
         valid_data = []
 
         # For validation, we remove the first five images of every location (e.g., austin{1-5}.tif, chicago{1-5}.tif) from the training set.
@@ -427,15 +432,17 @@ def get_dataloaders(data_dir: str,
 
         if fast:
             # Fast training model. Use only one image per location for training and one image per location for validation
-            for loc in locations:
+            for loc, weight in zip(locations, locations_weights):
                 valid_data.append(f'{loc}1')
                 train_data.append(f'{loc}6')
+                train_data_weights.append(weight)
         else:
-            for loc in locations:
+            for loc, weight in zip(locations, locations_weights):
                 for i in range(1, 6):
                     valid_data.append(f'{loc}{i}')
                 for i in range(6, 37):
                     train_data.append(f'{loc}{i}')
+                    train_data_weights.append(weight)
 
         train_img = [os.path.join(data_dir, 'train', 'images', f'{fname}.tif') for fname in train_data]
         valid_img = [os.path.join(data_dir, 'train', 'images', f'{fname}.tif') for fname in valid_data]
@@ -448,7 +455,7 @@ def get_dataloaders(data_dir: str,
                                          transform=train_transform,
                                          keep_in_mem=False)
         num_train_samples = int(len(trainset) * (5000 * 5000) / (image_size[0] * image_size[1]))
-        train_sampler = WeightedRandomSampler(np.ones(len(trainset)), num_train_samples)
+        train_sampler = WeightedRandomSampler(np.array(train_data_weights), num_train_samples)
 
         validset = InrialTiledImageMaskDataset(valid_img, valid_mask,
                                                use_edges=use_edges,
