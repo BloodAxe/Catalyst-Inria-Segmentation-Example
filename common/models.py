@@ -92,8 +92,28 @@ class FPNSegmentationModelV2(nn.Module):
         self.encoder.set_trainable(enabled)
 
 
+class UpsampleSmooth(nn.Module):
+    def __init__(self, filters: int, upsample_scale=2, mode='bilinear', align_corners=True):
+        super().__init__()
+        self.interpolation_mode = mode
+        self.upsample_scale = upsample_scale
+        self.align_corners = align_corners
+        self.conv = nn.Conv2d(filters, filters,
+                              kernel_size=3,
+                              padding=1)
+
+    def forward(self, x):
+        x = F.interpolate(x,
+                          scale_factor=self.upsample_scale,
+                          mode=self.interpolation_mode,
+                          align_corners=self.align_corners)
+
+        x = F.elu(self.conv(x), inplace=True) + x
+        return x
+
+
 class FPNSegmentationModelV3(nn.Module):
-    def __init__(self, encoder: E.EncoderModule, decoder: D.DecoderModule, num_classes: int, dropout=0.25):
+    def __init__(self, encoder: E.EncoderModule, decoder: D.DecoderModule, num_classes: int, dropout=0.5):
         super().__init__()
 
         self.encoder = encoder
@@ -104,12 +124,12 @@ class FPNSegmentationModelV3(nn.Module):
 
         # Final Classifier
         fused_features = sum(self.decoder.output_filters)
-        bottleneck_features = 64
+        bottleneck_features = 128
 
         self.bottleneck = nn.Conv2d(fused_features, bottleneck_features, kernel_size=3, padding=1)
 
-        self.up1 = UpsampleAddSmooth(bottleneck_features)
-        self.up2 = UpsampleAddSmooth(bottleneck_features)
+        self.up1 = UpsampleSmooth(bottleneck_features)
+        self.up2 = UpsampleSmooth(bottleneck_features)
 
         self.coarse_logits = nn.Conv2d(bottleneck_features, num_classes, kernel_size=1)
         self.logits = nn.Conv2d(bottleneck_features, num_classes, kernel_size=1)
@@ -124,12 +144,12 @@ class FPNSegmentationModelV3(nn.Module):
         features = self.fpn_fuse(dec_features)
         features = self.dropout(features)
 
-        features = F.leaky_relu(self.bottleneck(features), inplace=True)
+        features = self.bottleneck(features)
 
         coarse_logits = self.coarse_logits(features)
 
-        features = F.leaky_relu(self.up1(features), inplace=True)
-        features = F.leaky_relu(self.up1(features), inplace=True)
+        features = self.up1(features)
+        features = self.up1(features)
 
         edges = self.edges(features)
         logits = self.logits(features) - F.relu(edges)
@@ -260,55 +280,5 @@ def fpn_v3(encoder, num_classes=1, num_channels=3, bottleneck_features=256, pred
                            prediction_block=DoubleConvBNRelu,
                            fpn_features=bottleneck_features,
                            prediction_features=prediction_features)
-
-    return FPNSegmentationModelV3(encoder, decoder, num_classes)
-
-
-class FPNBottleneckSE(nn.Module):
-    def __init__(self, input_filters, output_filters):
-        super().__init__()
-        assert input_filters == output_filters
-        self.block1 = SEResNeXtBottleneck(input_filters, input_filters // 4, reduction=8, groups=1)
-        self.block2 = SEResNeXtBottleneck(input_filters, input_filters // 4, reduction=8, groups=1)
-
-    def forward(self, x):
-        x = self.block1(x)
-        x = self.block2(x)
-        return x
-
-
-def fpn_v2_se(encoder, num_classes=1, num_channels=3, bottleneck_features=256, prediction_features=128):
-    assert num_channels == 3
-
-    if inspect.isclass(encoder):
-        encoder = encoder()
-    elif isinstance(encoder, (LambdaType, partial)):
-        encoder = encoder()
-
-    assert isinstance(encoder, E.EncoderModule)
-    decoder = D.FPNDecoder(features=encoder.output_filters,
-                           prediction_block=FPNBottleneckSE,
-                           bottleneck=FPNBottleneckBlockBN,
-                           fpn_features=bottleneck_features,
-                           prediction_features=prediction_features)
-
-    return FPNSegmentationModelV2(encoder, decoder, num_classes)
-
-
-
-def fpn_v3_se(encoder, num_classes=1, num_channels=3, bottleneck_features=256, prediction_features=256):
-    assert num_channels == 3
-
-    if inspect.isclass(encoder):
-        encoder = encoder()
-    elif isinstance(encoder, (LambdaType, partial)):
-        encoder = encoder()
-
-    assert isinstance(encoder, E.EncoderModule)
-    decoder = D.FPNDecoder(features=encoder.output_filters,
-                           prediction_block=lambda input_filters, output_filters: SEResNeXtBottleneck(input_filters, output_filters // 4, reduction=4, groups=1),
-                           bottleneck=FPNBottleneckBlockBN,
-                           prediction_features=prediction_features,
-                           fpn_features=bottleneck_features)
 
     return FPNSegmentationModelV3(encoder, decoder, num_classes)

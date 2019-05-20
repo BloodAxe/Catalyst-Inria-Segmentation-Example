@@ -321,11 +321,13 @@ def hard_augmentations(image_size, whole_image_input=True, rot_angle=45):
             A.OneOf([
                 A.ShiftScaleRotate(shift_limit=0, scale_limit=0, rotate_limit=rot_angle, border_mode=cv2.BORDER_CONSTANT),
                 A.IAAAffine(shear=0.1, rotate=rot_angle, mode='constant'),
+                A.NoOp()
             ]),
 
             A.OneOf([
                 A.GridDistortion(border_mode=cv2.BORDER_CONSTANT),
                 A.ElasticTransform(alpha_affine=0, border_mode=cv2.BORDER_CONSTANT),
+                A.NoOp()
             ]),
             # Crop to desired image size
             A.CenterCrop(image_size[0], image_size[1]),
@@ -337,7 +339,8 @@ def hard_augmentations(image_size, whole_image_input=True, rot_angle=45):
                 A.GridDistortion(border_mode=cv2.BORDER_CONSTANT),
                 A.ElasticTransform(alpha_affine=0, border_mode=cv2.BORDER_CONSTANT),
                 A.NoOp()
-            ])
+            ]),
+            A.NoOp()
         ])
 
     return A.Compose([
@@ -347,7 +350,8 @@ def hard_augmentations(image_size, whole_image_input=True, rot_angle=45):
         A.OneOf([
             A.GaussianBlur(),
             A.MotionBlur(),
-            A.IAASharpen()
+            A.IAASharpen(),
+            A.NoOp()
         ]),
 
         # D4 Augmentations
@@ -360,13 +364,15 @@ def hard_augmentations(image_size, whole_image_input=True, rot_angle=45):
         A.OneOf([
             A.Cutout(),
             A.GaussNoise(),
+            A.NoOp()
         ]),
         A.OneOf([
             A.RandomBrightnessContrast(),
             A.CLAHE(),
             A.HueSaturationValue(),
             A.RGBShift(),
-            A.RandomGamma()
+            A.RandomGamma(),
+            A.NoOp()
         ]),
         # Weather effects
         A.OneOf([

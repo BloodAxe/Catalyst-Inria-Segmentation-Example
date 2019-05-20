@@ -18,7 +18,7 @@ from tqdm import tqdm
 
 from common.ternausnet2 import TernausNetV2
 from .linknet import LinkNet152, LinkNet34
-from .models import fpn_v2, fpn_v1, fpn_v3, fpn_v2_se
+from .models import fpn_v2, fpn_v1, fpn_v3
 from .unet import UNet
 from pytorch_toolbelt.modules import encoders as E
 
@@ -34,16 +34,15 @@ def get_model(model_name: str, image_size=None) -> nn.Module:
         'fpn128_resnext50': partial(fpn_v1, encoder=E.SEResNeXt50Encoder, prediction_features=128),
         'fpn256_resnext50': partial(fpn_v1, encoder=E.SEResNeXt50Encoder, prediction_features=256),
         'fpn128_resnext50_v2': partial(fpn_v2, encoder=E.SEResNeXt50Encoder, prediction_features=128),
-        'fpn256_resnext50_v2': partial(fpn_v2, encoder=E.SEResNeXt50Encoder, prediction_features=256),
-        'fpn256_resnext50_v2_se': partial(fpn_v2_se, encoder=E.SEResNeXt50Encoder, bottleneck_features=256, prediction_features=256),
-        'fpn256_resnext50_v3': partial(fpn_v3, encoder=E.SEResNeXt50Encoder, bottleneck_features=512, prediction_features=256),
-        # 'fpn256_senet154_v2': partial(fpn_v2, encoder=E.SENet154Encoder, prediction_features=384),
-        'fpn256_senet154_v2': partial(fpn_v2, encoder=E.SENet154Encoder, prediction_features=256),
 
-        'ternausnetv2': partial(TernausNetV2, num_input_channels=3, num_classes=1),
-        'fpn128_wider_resnet20': partial(fpn_v1,
-                                         encoder=lambda _: E.WiderResnet20A2Encoder(layers=[1, 2, 3, 4, 5]),
-                                         prediction_features=128),
+        'fpn256_resnext50_v2': partial(fpn_v2, encoder=E.SEResNeXt50Encoder, bottleneck_features=256, prediction_features=256),
+        'fpn256_resnext50_v3': partial(fpn_v3, encoder=E.SEResNeXt50Encoder, bottleneck_features=256, prediction_features=256),
+        # 'fpn256_senet154_v2': partial(fpn_v2, encoder=E.SENet154Encoder, prediction_features=384),
+        # 'fpn256_senet154_v2': partial(fpn_v2, encoder=E.SENet154Encoder, bottleneck_features=512, prediction_features=256),
+        # 'ternausnetv2': partial(TernausNetV2, num_input_channels=3, num_classes=1),
+        # 'fpn128_wider_resnet20': partial(fpn_v1,
+        #                                  encoder=lambda _: E.WiderResnet20A2Encoder(layers=[1, 2, 3, 4, 5]),
+        #                                  prediction_features=128),
     }
 
     return registry[model_name.lower()]()
