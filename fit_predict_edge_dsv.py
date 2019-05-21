@@ -83,6 +83,7 @@ def main():
             except Exception as e:
                 print(e)
 
+    checkpoint=None
     if args.checkpoint:
         checkpoint = UtilsFactory.load_checkpoint(fs.auto_file(args.checkpoint))
         UtilsFactory.unpack_checkpoint(checkpoint, model=model)
@@ -98,6 +99,13 @@ def main():
     if run_train:
         criterion = get_loss(args.criterion)
         optimizer = get_optimizer(optimizer_name, model.parameters(), learning_rate)
+
+        if checkpoint is not None:
+            try:
+                UtilsFactory.unpack_checkpoint(checkpoint, optimizer=optimizer)
+                print('Restored optimizer state from checkpoint')
+            except Exception as e:
+                print('Failed to restore optimizer state from checkpoint', e)
 
         if fp16:
             from apex import amp
@@ -129,7 +137,7 @@ def main():
         log_dir = os.path.join('runs', prefix)
         os.makedirs(log_dir, exist_ok=False)
 
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 20, 40, 60, 90], gamma=0.5)
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 30, 50, 70, 90], gamma=0.5)
 
         # model runner
         runner = SupervisedRunner()

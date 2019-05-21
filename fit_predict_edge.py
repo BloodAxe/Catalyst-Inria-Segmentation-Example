@@ -81,6 +81,7 @@ def main():
             except Exception as e:
                 print(e)
 
+    checkpoint=None
     if args.checkpoint:
         checkpoint = UtilsFactory.load_checkpoint(fs.auto_file(args.checkpoint))
         UtilsFactory.unpack_checkpoint(checkpoint, model=model)
@@ -97,12 +98,12 @@ def main():
         criterion = get_loss(args.criterion)
         optimizer = get_optimizer(optimizer_name, model.parameters(), learning_rate)
 
-        try:
-            if args.checkpoint:
-                checkpoint = UtilsFactory.load_checkpoint(fs.auto_file(args.checkpoint))
+        if checkpoint is not None:
+            try:
                 UtilsFactory.unpack_checkpoint(checkpoint, optimizer=optimizer)
-        except RuntimeError as e:
-            print(e)
+                print('Restored optimizer state from checkpoint')
+            except Exception as e:
+                print('Failed to restore optimizer state from checkpoint', e)
 
         train_loader, valid_loader = get_dataloaders(data_dir=data_dir,
                                                      batch_size=batch_size,
