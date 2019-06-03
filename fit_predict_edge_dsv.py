@@ -21,8 +21,9 @@ from pytorch_toolbelt.utils.torch_utils import maybe_cuda, count_parameters
 from tqdm import tqdm
 
 from common.dataset import get_dataloaders, read_inria_rgb
-from common.factory import get_model, get_loss, get_optimizer, visualize_inria_predictions, predict
+from common.factory import get_loss, get_optimizer, visualize_inria_predictions, predict
 from common.metric import JaccardMetricPerImage, OptimalThreshold
+from common.models import get_model
 
 
 def main():

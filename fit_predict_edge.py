@@ -21,8 +21,9 @@ from pytorch_toolbelt.utils.torch_utils import maybe_cuda, count_parameters
 from tqdm import tqdm
 
 from common.dataset import get_dataloaders, read_inria_rgb
-from common.factory import get_model, get_loss, get_optimizer, visualize_inria_predictions, predict
-from common.metric import JaccardMetricPerImage
+from common.factory import get_loss, get_optimizer, visualize_inria_predictions, predict
+from common.metric import JaccardMetricPerImage, OptimalThreshold
+from common.models import get_model
 
 
 def main():
@@ -46,6 +47,7 @@ def main():
     parser.add_argument('-tm', '--train-mode', default='random', type=str, help='')
     parser.add_argument('--run-mode', default='fit_predict', type=str, help='')
     parser.add_argument('--transfer', default=None, type=str, help='')
+    parser.add_argument('--fp16', action='store_true')
 
     args = parser.parse_args()
     set_manual_seed(args.seed)
@@ -63,6 +65,7 @@ def main():
     train_mode = args.train_mode
     run_mode = args.run_mode
     log_dir = None
+    fp16 = args.fp16
 
     run_train = run_mode == 'fit_predict' or run_mode == 'fit'
     run_predict = run_mode == 'fit_predict' or run_mode == 'predict'
@@ -81,7 +84,7 @@ def main():
             except Exception as e:
                 print(e)
 
-    checkpoint=None
+    checkpoint = None
     if args.checkpoint:
         checkpoint = UtilsFactory.load_checkpoint(fs.auto_file(args.checkpoint))
         UtilsFactory.unpack_checkpoint(checkpoint, model=model)
@@ -105,6 +108,11 @@ def main():
             except Exception as e:
                 print('Failed to restore optimizer state from checkpoint', e)
 
+        if fp16:
+            from apex import amp
+
+            model, optimizer = amp.initialize(model, optimizer, opt_level='O1')
+
         train_loader, valid_loader = get_dataloaders(data_dir=data_dir,
                                                      batch_size=batch_size,
                                                      num_workers=num_workers,
@@ -120,15 +128,23 @@ def main():
 
         current_time = datetime.now().strftime('%b%d_%H_%M')
         prefix = f'{current_time}_{args.model}_edge_{args.criterion}'
+
+        if fp16:
+            prefix += '_fp16'
+
+        if fast:
+            prefix += '_fast'
+
         log_dir = os.path.join('runs', prefix)
         os.makedirs(log_dir, exist_ok=False)
 
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 20, 40, 60, 90], gamma=0.5)
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 30, 50, 70, 90], gamma=0.5)
 
         # model runner
         runner = SupervisedRunner()
 
         print('Train session    :', prefix)
+        print('\tFP16 mode      :', fp16)
         print('\tFast mode      :', args.fast)
         print('\tTrain mode     :', train_mode)
         print('\tEpochs         :', num_epochs)

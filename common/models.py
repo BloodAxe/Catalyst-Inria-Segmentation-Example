@@ -6,6 +6,7 @@ import torch
 from pytorch_toolbelt.inference.functional import pad_image_tensor, unpad_image_tensor
 from pytorch_toolbelt.modules import encoders as E
 from pytorch_toolbelt.modules import decoders as D
+from pytorch_toolbelt.modules.activations import Swish
 from pytorch_toolbelt.modules.backbone.senet import SEResNeXtBottleneck
 from pytorch_toolbelt.modules.dsconv import DepthwiseSeparableConv2d
 from pytorch_toolbelt.modules.scse import ChannelSpatialGate2d, ChannelSpatialGate2dV2
@@ -16,6 +17,10 @@ from torch import nn
 from torch.nn import functional as F
 
 from pytorch_toolbelt.modules.unet import UnetCentralBlock, UnetDecoderBlock, UnetEncoderBlock
+
+from common.linknet import LinkNet152, LinkNet34
+from common.resnet import SwishGroupnormResnet101Encoder
+from common.unet import UNet
 
 
 class FPNSegmentationModel(nn.Module):
@@ -184,7 +189,7 @@ class DoubleConvBNRelu(nn.Module):
         self.bn1 = nn.BatchNorm2d(in_dec_filters)
 
         self.conv2 = nn.Conv2d(out_filters, out_filters, kernel_size=3, padding=1, stride=1, bias=False)
-        self.bn2 = nn.BatchNorm2d(in_dec_filters)
+        self.bn2 = nn.BatchNorm2d(out_filters)
 
     def forward(self, x):
         x = self.conv1(x)
@@ -194,6 +199,29 @@ class DoubleConvBNRelu(nn.Module):
         x = self.conv2(x)
         x = self.bn2(x)
         x = F.relu(x, inplace=True)
+        return x
+
+
+class DoubleConvGNSwish(nn.Module):
+    def __init__(self, in_dec_filters: int, out_filters: int):
+        super().__init__()
+        self.conv1 = nn.Conv2d(in_dec_filters, out_filters, kernel_size=3, padding=1, stride=1, bias=False)
+        self.bn1 = nn.GroupNorm(32, out_filters)
+        self.act1 = Swish()
+
+        self.conv2 = nn.Conv2d(out_filters, out_filters, kernel_size=3, padding=1, stride=1, bias=False)
+        self.bn2 = nn.GroupNorm(32, out_filters)
+        self.act2 = Swish()
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.bn1(x)
+        x = self.act1(x)
+
+        x = self.conv2(x)
+        x = self.bn2(x)
+        x = self.act2(x)
+
         return x
 
 
@@ -282,3 +310,80 @@ def fpn_v3(encoder, num_classes=1, num_channels=3, bottleneck_features=256, pred
                            prediction_features=prediction_features)
 
     return FPNSegmentationModelV3(encoder, decoder, num_classes)
+
+
+def fpn_v4(num_classes=1, num_channels=3, bottleneck_features=256, prediction_features=128):
+    assert num_channels == 3
+
+    encoder = SwishGroupnormResnet101Encoder(layers=[1, 2, 3, 4])
+
+    assert isinstance(encoder, E.EncoderModule)
+    decoder = D.FPNDecoder(features=encoder.output_filters,
+                           bottleneck=DoubleConvGNSwish,
+                           prediction_block=DoubleConvGNSwish,
+                           upsample_add_block=partial(UpsampleAdd, mode='bilinear', align_corners=True),
+                           fpn_features=bottleneck_features,
+                           prediction_features=prediction_features)
+
+    return FPNSegmentationModelV2(encoder, decoder, num_classes, dropout=0.5)
+
+
+def fpn_v5(num_classes=1, num_channels=3):
+    assert num_channels == 3
+
+    encoder = SwishGroupnormResnet101Encoder(layers=[1, 2, 3, 4])
+
+    assert isinstance(encoder, E.EncoderModule)
+    decoder = D.FPNDecoder(features=encoder.output_filters,
+                           bottleneck=DoubleConvGNSwish,
+                           prediction_block=DoubleConvGNSwish,
+                           upsample_add_block=partial(UpsampleAdd, mode='bilinear', align_corners=True),
+                           fpn_features=[256, 512, 1024, 2048],
+                           prediction_features=[64, 128, 256, 512])
+
+    return FPNSegmentationModelV2(encoder, decoder, num_classes, dropout=0.5)
+
+
+def get_model(model_name: str, image_size=None) -> nn.Module:
+    registry = {
+        'unet': partial(UNet, upsample=False),
+        'linknet34': LinkNet34,
+        'linknet152': LinkNet152,
+        'fpn128_mobilenetv2': partial(fpn_v2, encoder=partial(E.MobilenetV2Encoder, layers=[2, 3, 5, 6, 7]), prediction_features=128),
+        'fpn128_mobilenetv3': partial(fpn_v2, encoder=partial(E.MobilenetV3Encoder, layers=[0, 1, 2, 3, 4, 5]), prediction_features=128),
+        'fpn128_resnet34': partial(fpn_v1, encoder=E.Resnet34Encoder, prediction_features=128),
+        'fpn128_resnext50': partial(fpn_v1, encoder=E.SEResNeXt50Encoder, prediction_features=128),
+        'fpn256_resnext50': partial(fpn_v1, encoder=E.SEResNeXt50Encoder, prediction_features=256),
+        'fpn128_resnext50_v2': partial(fpn_v2, encoder=E.SEResNeXt50Encoder, prediction_features=128),
+
+        'fpn256_resnext50_v2': partial(fpn_v2, encoder=E.SEResNeXt50Encoder, bottleneck_features=256, prediction_features=256),
+        'fpn256_resnext50_v3': partial(fpn_v3, encoder=E.SEResNeXt50Encoder, bottleneck_features=256, prediction_features=256),
+        'fpn256_resnext101_v3': partial(fpn_v3, encoder=E.SEResNeXt101Encoder, bottleneck_features=256, prediction_features=256),
+        # 'fpn256_senet154_v2': partial(fpn_v2, encoder=E.SENet154Encoder, prediction_features=384),
+        # 'fpn256_senet154_v2': partial(fpn_v2, encoder=E.SENet154Encoder, bottleneck_features=512, prediction_features=256),
+        # 'ternausnetv2': partial(TernausNetV2, num_input_channels=3, num_classes=1),
+        # 'fpn128_wider_resnet20': partial(fpn_v1,
+        #                                  encoder=lambda _: E.WiderResnet20A2Encoder(layers=[1, 2, 3, 4, 5]),
+        #                                  prediction_features=128),
+        'fpn256_resnet101_v4': fpn_v4
+    }
+
+    return registry[model_name.lower()]()
+
+
+def test_fpn_v4():
+    model = fpn_v4().eval()
+    print(count_parameters(model))
+
+    x = torch.rand((1, 3, 512, 512))
+    y = model(x)
+    print(y)
+
+
+def test_fpn_v5():
+    model = fpn_v5().eval()
+    print(count_parameters(model))
+
+    x = torch.rand((1, 3, 512, 512))
+    y = model(x)
+    print(y)
