@@ -1,5 +1,5 @@
 torch>=1.0
-catalyst
-albumentations
-pytorch_toolbelt>=0.0.8
+catalyst>=19.6
+albumentations>=0.2.3
+pytorch_toolbelt>=0.0.9
 opencv-python
