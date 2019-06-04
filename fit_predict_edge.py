@@ -9,12 +9,11 @@ import cv2
 import torch
 import numpy as np
 
-from catalyst.dl.callbacks import UtilsFactory, LossCallback, EarlyStoppingCallback, CheckpointCallback
+from catalyst.dl.callbacks import UtilsFactory, LossCallback, EarlyStoppingCallback
 from catalyst.dl.experiments import SupervisedRunner
 from torch.backends import cudnn
-from torch.optim import Adam
 
-from pytorch_toolbelt.utils.catalyst_utils import ShowPolarBatchesCallback, EpochJaccardMetric, PixelAccuracyMetric
+from pytorch_toolbelt.utils.catalyst_utils import ShowPolarBatchesCallback, PixelAccuracyMetric
 from pytorch_toolbelt.utils import fs
 from pytorch_toolbelt.utils.random import set_manual_seed
 from pytorch_toolbelt.utils.torch_utils import maybe_cuda, count_parameters
@@ -110,7 +109,6 @@ def main():
 
         if fp16:
             from apex import amp
-
             model, optimizer = amp.initialize(model, optimizer, opt_level='O1')
 
         train_loader, valid_loader = get_dataloaders(data_dir=data_dir,
@@ -138,7 +136,7 @@ def main():
         log_dir = os.path.join('runs', prefix)
         os.makedirs(log_dir, exist_ok=False)
 
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 30, 50, 70, 90], gamma=0.5)
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[25, 40, 50, 60, 70, 80, 90], gamma=0.5)
 
         # model runner
         runner = SupervisedRunner()

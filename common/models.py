@@ -315,6 +315,22 @@ def fpn_v3(encoder, num_classes=1, num_channels=3, bottleneck_features=256, pred
 def fpn_v4(num_classes=1, num_channels=3, bottleneck_features=256, prediction_features=128):
     assert num_channels == 3
 
+    encoder = E.Resnet101Encoder(layers=[1, 2, 3, 4])
+
+    assert isinstance(encoder, E.EncoderModule)
+    decoder = D.FPNDecoder(features=encoder.output_filters,
+                           bottleneck=DoubleConvGNSwish,
+                           prediction_block=DoubleConvGNSwish,
+                           upsample_add_block=partial(UpsampleAdd, mode='bilinear', align_corners=True),
+                           fpn_features=bottleneck_features,
+                           prediction_features=prediction_features)
+
+    return FPNSegmentationModelV2(encoder, decoder, num_classes, dropout=0.5)
+
+
+def fpn_v4_swish(num_classes=1, num_channels=3, bottleneck_features=256, prediction_features=128):
+    assert num_channels == 3
+
     encoder = SwishGroupnormResnet101Encoder(layers=[1, 2, 3, 4])
 
     assert isinstance(encoder, E.EncoderModule)
@@ -349,23 +365,29 @@ def get_model(model_name: str, image_size=None) -> nn.Module:
         'unet': partial(UNet, upsample=False),
         'linknet34': LinkNet34,
         'linknet152': LinkNet152,
-        'fpn128_mobilenetv2': partial(fpn_v2, encoder=partial(E.MobilenetV2Encoder, layers=[2, 3, 5, 6, 7]), prediction_features=128),
-        'fpn128_mobilenetv3': partial(fpn_v2, encoder=partial(E.MobilenetV3Encoder, layers=[0, 1, 2, 3, 4, 5]), prediction_features=128),
+        'fpn128_mobilenetv2': partial(fpn_v2, encoder=partial(E.MobilenetV2Encoder, layers=[2, 3, 5, 6, 7]),
+                                      prediction_features=128),
+        'fpn128_mobilenetv3': partial(fpn_v2, encoder=partial(E.MobilenetV3Encoder, layers=[0, 1, 2, 3, 4, 5]),
+                                      prediction_features=128),
         'fpn128_resnet34': partial(fpn_v1, encoder=E.Resnet34Encoder, prediction_features=128),
         'fpn128_resnext50': partial(fpn_v1, encoder=E.SEResNeXt50Encoder, prediction_features=128),
         'fpn256_resnext50': partial(fpn_v1, encoder=E.SEResNeXt50Encoder, prediction_features=256),
         'fpn128_resnext50_v2': partial(fpn_v2, encoder=E.SEResNeXt50Encoder, prediction_features=128),
 
-        'fpn256_resnext50_v2': partial(fpn_v2, encoder=E.SEResNeXt50Encoder, bottleneck_features=256, prediction_features=256),
-        'fpn256_resnext50_v3': partial(fpn_v3, encoder=E.SEResNeXt50Encoder, bottleneck_features=256, prediction_features=256),
-        'fpn256_resnext101_v3': partial(fpn_v3, encoder=E.SEResNeXt101Encoder, bottleneck_features=256, prediction_features=256),
+        'fpn256_resnext50_v2': partial(fpn_v2, encoder=E.SEResNeXt50Encoder, bottleneck_features=256,
+                                       prediction_features=256),
+        'fpn256_resnext50_v3': partial(fpn_v3, encoder=E.SEResNeXt50Encoder, bottleneck_features=256,
+                                       prediction_features=256),
+        'fpn256_resnext101_v3': partial(fpn_v3, encoder=E.SEResNeXt101Encoder, bottleneck_features=256,
+                                        prediction_features=256),
         # 'fpn256_senet154_v2': partial(fpn_v2, encoder=E.SENet154Encoder, prediction_features=384),
         # 'fpn256_senet154_v2': partial(fpn_v2, encoder=E.SENet154Encoder, bottleneck_features=512, prediction_features=256),
         # 'ternausnetv2': partial(TernausNetV2, num_input_channels=3, num_classes=1),
         # 'fpn128_wider_resnet20': partial(fpn_v1,
         #                                  encoder=lambda _: E.WiderResnet20A2Encoder(layers=[1, 2, 3, 4, 5]),
         #                                  prediction_features=128),
-        'fpn256_resnet101_v4': fpn_v4
+        'fpn256_resnet101_v4': fpn_v4,
+        'fpn256_resnet101_v4_swish': fpn_v4_swish
     }
 
     return registry[model_name.lower()]()
