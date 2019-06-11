@@ -108,11 +108,6 @@ def main():
             except Exception as e:
                 print('Failed to restore optimizer state from checkpoint', e)
 
-        if fp16:
-            from apex import amp
-
-            model, optimizer = amp.initialize(model, optimizer, opt_level='O1')
-
         train_loader, valid_loader = get_dataloaders(data_dir=data_dir,
                                                      batch_size=batch_size,
                                                      num_workers=num_workers,
@@ -164,6 +159,7 @@ def main():
 
         # model training
         runner.train(
+            fp16=fp16,
             model=model,
             criterion=criterion,
             optimizer=optimizer,
