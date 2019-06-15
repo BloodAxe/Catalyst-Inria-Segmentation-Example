@@ -324,33 +324,23 @@ def hard_augmentations(image_size, whole_image_input=True, rot_angle=45):
                 A.NoOp()
             ]),
 
-            A.OneOf([
-                A.GridDistortion(border_mode=cv2.BORDER_CONSTANT),
-                A.ElasticTransform(alpha_affine=0, border_mode=cv2.BORDER_CONSTANT),
-                A.NoOp()
-            ]),
             # Crop to desired image size
             A.CenterCrop(image_size[0], image_size[1]),
         ])
     else:
         spatial_transform = A.Compose([
             A.ShiftScaleRotate(scale_limit=0.5, rotate_limit=45, border_mode=cv2.BORDER_CONSTANT),
-            A.OneOf([
-                A.GridDistortion(border_mode=cv2.BORDER_CONSTANT),
-                A.ElasticTransform(alpha_affine=0, border_mode=cv2.BORDER_CONSTANT),
-                A.NoOp()
-            ]),
             A.NoOp()
         ])
 
     return A.Compose([
         spatial_transform,
 
-        # Add occasion blur/sharpening
+        # Add occasion blur
         A.OneOf([
             A.GaussianBlur(),
-            A.MotionBlur(),
-            A.IAASharpen(),
+            A.GaussNoise(),
+            A.IAAAdditiveGaussianNoise(),
             A.NoOp()
         ]),
 
@@ -360,12 +350,8 @@ def hard_augmentations(image_size, whole_image_input=True, rot_angle=45):
             A.RandomRotate90(),
         ]),
 
+        A.Cutout(),
         # Spatial-preserving augmentations:
-        A.OneOf([
-            A.Cutout(),
-            A.GaussNoise(),
-            A.NoOp()
-        ]),
         A.OneOf([
             A.RandomBrightnessContrast(),
             A.CLAHE(),
