@@ -163,7 +163,7 @@ def main():
             callbacks=[
                 PixelAccuracyMetric(),
                 JaccardMetricPerImage(),
-                OptimalThreshold(),
+                # OptimalThreshold(),
                 ShowPolarBatchesCallback(visualize_inria_predictions, metric='accuracy', minimize=False),
                 EarlyStoppingCallback(10, metric='jaccard', minimize=False)
             ],

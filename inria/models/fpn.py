@@ -139,7 +139,7 @@ class FPNSegmentationModel(nn.Module):
 
 
 def reset34_fpn(num_classes=1, fpn_features=128):
-    encoder = E.Resnet101Encoder()
+    encoder = E.Resnet34Encoder()
     return FPNSegmentationModel(encoder, num_classes, fpn_features)
 
 
@@ -149,7 +149,7 @@ def reset101_fpn(num_classes=1, fpn_features=256):
 
 
 def effnetB4_fpn(num_classes=1, fpn_features=128):
-    encoder = E.EfficientNetB7Encoder()
+    encoder = E.EfficientNetB4Encoder()
     return FPNSegmentationModel(encoder, num_classes, fpn_features)
 
 

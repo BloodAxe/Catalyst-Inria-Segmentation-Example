@@ -23,8 +23,8 @@ def get_model(model_name: str) -> nn.Module:
         # FPN family
         'reset34_fpn': reset34_fpn,
         'reset101_fpn': reset101_fpn,
-        'effnetB4_fpn': effnetB4_fpn,
-        'effnetB7_fpn': effnetB7_fpn,
+        'effnetb4_fpn': effnetB4_fpn,
+        'effnetb7_fpn': effnetB7_fpn,
 
     }
 
