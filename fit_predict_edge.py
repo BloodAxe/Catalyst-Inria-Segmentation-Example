@@ -14,7 +14,6 @@ from pytorch_toolbelt.utils import fs
 from pytorch_toolbelt.utils.catalyst_utils import ShowPolarBatchesCallback, PixelAccuracyMetric
 from pytorch_toolbelt.utils.random import set_manual_seed
 from pytorch_toolbelt.utils.torch_utils import maybe_cuda, count_parameters
-from torch.backends import cudnn
 from tqdm import tqdm
 
 from inria.dataset import get_dataloaders, read_inria_rgb
