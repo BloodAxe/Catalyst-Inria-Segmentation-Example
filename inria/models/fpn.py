@@ -138,12 +138,12 @@ class FPNSegmentationModel(nn.Module):
         self.encoder.set_trainable(enabled)
 
 
-def reset34_fpn(num_classes=1, fpn_features=128):
+def resnet34_fpn(num_classes=1, fpn_features=128):
     encoder = E.Resnet34Encoder()
     return FPNSegmentationModel(encoder, num_classes, fpn_features)
 
 
-def reset101_fpn(num_classes=1, fpn_features=256):
+def resnet101_fpn(num_classes=1, fpn_features=256):
     encoder = E.Resnet101Encoder()
     return FPNSegmentationModel(encoder, num_classes, fpn_features)
 
