@@ -6,23 +6,20 @@ import os
 from datetime import datetime
 
 import cv2
-import torch
 import numpy as np
-
+import torch
 from catalyst.dl.callbacks import UtilsFactory, LossCallback, EarlyStoppingCallback
 from catalyst.dl.experiments import SupervisedRunner
-from torch.backends import cudnn
-
-from pytorch_toolbelt.utils.catalyst_utils import ShowPolarBatchesCallback, PixelAccuracyMetric
 from pytorch_toolbelt.utils import fs
+from pytorch_toolbelt.utils.catalyst_utils import ShowPolarBatchesCallback, PixelAccuracyMetric
 from pytorch_toolbelt.utils.random import set_manual_seed
 from pytorch_toolbelt.utils.torch_utils import maybe_cuda, count_parameters
 from tqdm import tqdm
 
-from common.dataset import get_dataloaders, read_inria_rgb
-from common.factory import get_loss, get_optimizer, visualize_inria_predictions, predict
-from common.metric import JaccardMetricPerImage, OptimalThreshold
-from common.models import get_model
+from inria.dataset import get_dataloaders, read_inria_rgb
+from inria.factory import get_loss, get_optimizer, visualize_inria_predictions, predict
+from inria.metric import JaccardMetricPerImage, OptimalThreshold
+from inria.models import get_model
 
 
 def main():
@@ -32,7 +29,7 @@ def main():
     parser.add_argument('-dd', '--data-dir', type=str, required=True, help='Data directory for INRIA sattelite dataset')
     parser.add_argument('-m', '--model', type=str, default='fpn128_resnext50_v2', help='')
     parser.add_argument('-b', '--batch-size', type=int, default=8, help='Batch Size during training, e.g. -b 64')
-    parser.add_argument('-e', '--epochs', type=int, default=100, help='Epoch to run')
+    parser.add_argument('-e', '--epochs', type=int, default=150, help='Epoch to run')
     # parser.add_argument('-es', '--early-stopping', type=int, default=None, help='Maximum number of epochs without improvement')
     # parser.add_argument('-fe', '--freeze-encoder', type=int, default=0, help='Freeze encoder parameters for N epochs')
     # parser.add_argument('-ft', '--fine-tune', action='store_true')
@@ -69,7 +66,7 @@ def main():
     run_train = run_mode == 'fit_predict' or run_mode == 'fit'
     run_predict = run_mode == 'fit_predict' or run_mode == 'predict'
 
-    model = maybe_cuda(get_model(model_name, image_size=image_size))
+    model = maybe_cuda(get_model(model_name))
 
     if args.transfer:
         transfer_checkpoint = fs.auto_file(args.transfer)
@@ -107,10 +104,6 @@ def main():
             except Exception as e:
                 print('Failed to restore optimizer state from checkpoint', e)
 
-        if fp16:
-            from apex import amp
-            model, optimizer = amp.initialize(model, optimizer, opt_level='O1')
-
         train_loader, valid_loader = get_dataloaders(data_dir=data_dir,
                                                      batch_size=batch_size,
                                                      num_workers=num_workers,
@@ -136,7 +129,7 @@ def main():
         log_dir = os.path.join('runs', prefix)
         os.makedirs(log_dir, exist_ok=False)
 
-        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[25, 40, 50, 60, 70, 80, 90], gamma=0.5)
+        scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=[10, 30, 50, 70, 90], gamma=0.5)
 
         # model runner
         runner = SupervisedRunner()
@@ -162,6 +155,7 @@ def main():
 
         # model training
         runner.train(
+            fp16=fp16,
             model=model,
             criterion=criterion,
             optimizer=optimizer,
@@ -187,7 +181,7 @@ def main():
             logdir=log_dir,
             num_epochs=num_epochs,
             verbose=True,
-            main_metric='optimal_threshold/iou',
+            main_metric='jaccard',
             minimize_metric=False,
             state_kwargs={"cmd_args": vars(args)}
         )
@@ -223,5 +217,4 @@ def main():
 
 
 if __name__ == '__main__':
-    torch.backends.cudnn.benchmark = True
     main()
