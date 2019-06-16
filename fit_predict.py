@@ -29,7 +29,7 @@ def main():
     parser.add_argument('-dd', '--data-dir', type=str, required=True, help='Data directory for INRIA sattelite dataset')
     parser.add_argument('-m', '--model', type=str, default='unet', help='')
     parser.add_argument('-b', '--batch-size', type=int, default=8, help='Batch Size during training, e.g. -b 64')
-    parser.add_argument('-e', '--epochs', type=int, default=150, help='Epoch to run')
+    parser.add_argument('-e', '--epochs', type=int, default=100, help='Epoch to run')
     # parser.add_argument('-es', '--early-stopping', type=int, default=None, help='Maximum number of epochs without improvement')
     # parser.add_argument('-fe', '--freeze-encoder', type=int, default=0, help='Freeze encoder parameters for N epochs')
     # parser.add_argument('-ft', '--fine-tune', action='store_true')

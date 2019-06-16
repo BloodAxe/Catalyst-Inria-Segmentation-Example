@@ -2,7 +2,7 @@ from functools import partial
 
 from torch import nn
 
-from inria.models.fpn import effnetB4_fpn, resnet101_fpn, resnet34_fpn, effnetB7_fpn
+from inria.models.fpn import effnetB4_fpn, resnet101_fpn, resnet34_fpn, effnetB7_fpn, resnext50_fpn
 from inria.models.linknet import LinkNet34, LinkNet152
 from inria.models.unet import UNet
 
@@ -22,6 +22,7 @@ def get_model(model_name: str) -> nn.Module:
 
         # FPN family
         'resnet34_fpn': resnet34_fpn,
+        'resnext50_fpn': resnext50_fpn,
         'resnet101_fpn': resnet101_fpn,
         'effnetb4_fpn': effnetB4_fpn,
         'effnetb7_fpn': effnetB7_fpn,

@@ -143,6 +143,11 @@ def resnet34_fpn(num_classes=1, fpn_features=128):
     return FPNSegmentationModel(encoder, num_classes, fpn_features)
 
 
+def resnext50_fpn(num_classes=1, fpn_features=128):
+    encoder = E.SEResNeXt50Encoder()
+    return FPNSegmentationModel(encoder, num_classes, fpn_features, dropout=0.5)
+
+
 def resnet101_fpn(num_classes=1, fpn_features=256):
     encoder = E.Resnet101Encoder()
     return FPNSegmentationModel(encoder, num_classes, fpn_features)
