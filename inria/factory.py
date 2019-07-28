@@ -157,25 +157,3 @@ def optimize_threshold(gt_images, pred_images):
             union += u
 
     return thresholds, intersection / (union - intersection)
-
-
-def visualize_inria_predictions(input: dict, output: dict, mean=(0.485, 0.456, 0.406), std=(0.229, 0.224, 0.225)):
-    images = []
-    for image, target, image_id, logits in zip(input['features'], input['targets'], input['image_id'], output['logits']):
-        image = rgb_image_from_tensor(image, mean, std)
-        target = to_numpy(target).squeeze(0)
-        logits = to_numpy(logits).squeeze(0)
-
-        overlay = np.zeros_like(image)
-        true_mask = target > 0
-        pred_mask = logits > 0
-
-        overlay[true_mask & pred_mask] = np.array([0, 250, 0], dtype=overlay.dtype)  # Correct predictions (Hits) painted with green
-        overlay[true_mask & ~pred_mask] = np.array([250, 0, 0], dtype=overlay.dtype)  # Misses painted with red
-        overlay[~true_mask & pred_mask] = np.array([250, 250, 0], dtype=overlay.dtype)  # False alarm painted with yellow
-
-        overlay = cv2.addWeighted(image, 0.5, overlay, 0.5, 0, dtype=cv2.CV_8U)
-        cv2.putText(overlay, str(image_id), (10, 15), cv2.FONT_HERSHEY_PLAIN, 1, (250, 250, 250))
-
-        images.append(overlay)
-    return images

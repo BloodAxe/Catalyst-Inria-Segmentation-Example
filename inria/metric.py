@@ -2,7 +2,7 @@ from collections import defaultdict
 import numpy as np
 import torch
 from catalyst.dl.callbacks import Callback, RunnerState
-from pytorch_toolbelt.utils.catalyst_utils import _get_tensorboard_logger
+from pytorch_toolbelt.utils.catalys import get_tensorboard_logger
 
 
 class JaccardMetricPerImage(Callback):

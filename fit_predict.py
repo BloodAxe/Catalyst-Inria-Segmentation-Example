@@ -94,7 +94,6 @@ def main():
         log_dir = os.path.dirname(os.path.dirname(fs.auto_file(args.checkpoint)))
 
     if run_train:
-
         criterion = get_loss(args.criterion)
         optimizer = get_optimizer(optimizer_name, model.parameters(), learning_rate)
 
