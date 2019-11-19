@@ -1,108 +1,68 @@
-import torch
-import torch.nn as nn
-import torch.nn.functional as F
+from pytorch_toolbelt.inference.functional import pad_image_tensor, unpad_image_tensor
+from pytorch_toolbelt.modules import ABN
+from pytorch_toolbelt.modules import encoders as E
+from pytorch_toolbelt.modules.decoders import FPNSumDecoder, FPNCatDecoder, UNetDecoder, UNetDecoderV2
+from pytorch_toolbelt.modules.encoders import EncoderModule
+from torch import nn
+from torch.nn import functional as F
 
+from ..dataset import (
+    OUTPUT_MASK_4_KEY,
+    OUTPUT_MASK_8_KEY,
+    OUTPUT_MASK_16_KEY,
+    OUTPUT_MASK_32_KEY,
+    OUTPUT_MASK_KEY,
+)
 
-class double_conv(nn.Module):
-    """Construct a double (conv => BN => ReLU) module.
-    """
+__all__=["seresnext101_unet256"]
 
-    def __init__(self, in_ch, out_ch):
-        super(double_conv, self).__init__()
-        self.conv = nn.Sequential(
-            nn.Conv2d(in_ch, out_ch, 3, padding=1, bias=False),
-            nn.BatchNorm2d(out_ch),
-            nn.SELU(inplace=True),
-            nn.Conv2d(out_ch, out_ch, 3, padding=1, bias=False),
-            nn.BatchNorm2d(out_ch),
-            nn.SELU(inplace=True)
+class UnetSegmentationModel(nn.Module):
+    def __init__(
+        self,
+        encoder: EncoderModule,
+        num_classes: int,
+        dropout=0.25,
+        abn_block=ABN,
+        unet_channels=32,
+        full_size_mask=True,
+    ):
+        super().__init__()
+        self.encoder = encoder
+
+        self.decoder = UNetDecoder(
+            feature_maps=encoder.output_filters,
+            decoder_features=unet_channels,
+            mask_channels=num_classes,
         )
 
-    def forward(self, x):
-        x = self.conv(x)
-        return x
-
-
-class inconv(nn.Module):
-    def __init__(self, in_ch, out_ch):
-        super(inconv, self).__init__()
-        self.conv = double_conv(in_ch, out_ch)
+        self.full_size_mask = full_size_mask
 
     def forward(self, x):
-        x = self.conv(x)
-        return x
+        x, pad = pad_image_tensor(x, 32)
+        enc_features = self.encoder(x)
+
+        # Decode mask
+        mask, dsv = self.decoder(enc_features)
+
+        if self.full_size_mask:
+            mask = F.interpolate(
+                mask, size=x.size()[2:], mode="bilinear", align_corners=False
+            )
+            mask = unpad_image_tensor(mask, pad)
+
+        output = {
+            OUTPUT_MASK_KEY: mask,
+            OUTPUT_MASK_4_KEY: dsv[0],
+            OUTPUT_MASK_8_KEY: dsv[1],
+            OUTPUT_MASK_16_KEY: dsv[2],
+            OUTPUT_MASK_32_KEY: dsv[3],
+        }
+
+        return output
 
 
-class down(nn.Module):
-    def __init__(self, in_ch, out_ch):
-        super(down, self).__init__()
-        self.mpconv = nn.Sequential(
-            nn.MaxPool2d(2),
-            double_conv(in_ch, out_ch)
-        )
-
-    def forward(self, x):
-        x = self.mpconv(x)
-        return x
-
-
-class up(nn.Module):
-    def __init__(self, in_ch, out_ch, upsample=True):
-        super(up, self).__init__()
-
-        if upsample:
-            self.up = nn.Upsample(scale_factor=2, mode='nearest')
-        else:
-            self.up = nn.ConvTranspose2d(in_ch // 2, in_ch // 2, 2, stride=2)
-
-        self.conv = double_conv(in_ch, out_ch)
-
-    def forward(self, x1, x2):
-        x1 = self.up(x1)
-        diffX = x1.size()[2] - x2.size()[2]
-        diffY = x1.size()[3] - x2.size()[3]
-        x2 = F.pad(x2, (diffX // 2, int(diffX / 2),
-                        diffY // 2, int(diffY / 2)))
-        x = torch.cat([x2, x1], dim=1)
-        x = self.conv(x)
-        return x
-
-
-class outconv(nn.Module):
-    def __init__(self, in_ch, out_ch):
-        super(outconv, self).__init__()
-        self.conv = nn.Conv2d(in_ch, out_ch, 1)
-
-    def forward(self, x):
-        x = self.conv(x)
-        return x
-
-
-class UNet(nn.Module):
-    def __init__(self, n_channels=3, n_classes=1, n_filters=32, upsample=True):
-        super(UNet, self).__init__()
-        self.inc = inconv(n_channels, n_filters)
-        self.down1 = down(n_filters, n_filters * 2)
-        self.down2 = down(n_filters * 2, n_filters * 4)
-        self.down3 = down(n_filters * 4, n_filters * 8)
-        self.down4 = down(n_filters * 8, n_filters * 8)
-        self.up1 = up(n_filters * 16, n_filters * 4, upsample=upsample)
-        self.up2 = up(n_filters * 8, n_filters * 2, upsample=upsample)
-        self.up3 = up(n_filters * 4, n_filters, upsample=upsample)
-        self.up4 = up(n_filters * 2, n_filters, upsample=upsample)
-        self.finaldrop = nn.Dropout2d(p=0.5)
-        self.outc = outconv(n_filters, n_classes)
-
-    def forward(self, x):
-        x1 = self.inc(x)
-        x2 = self.down1(x1)
-        x3 = self.down2(x2)
-        x4 = self.down3(x3)
-        x5 = self.down4(x4)
-        x = self.up1(x5, x4)
-        x = self.up2(x, x3)
-        x = self.up3(x, x2)
-        x = self.up4(x, x1)
-        x = self.finaldrop(x)
-        x = self.outc(x)
-        return x
+def seresnext101_unet64(num_classes=1, dropout=0.0):
+    encoder = E.SEResNeXt101Encoder()
+    return UnetSegmentationModel(
+        encoder, num_classes=num_classes, unet_channels=64, dropout=dropout
+    )

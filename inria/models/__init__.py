@@ -1,32 +1,21 @@
-from functools import partial
-
 from torch import nn
 
-from inria.models.fpn import effnetB4_fpn, resnet101_fpn, resnet34_fpn, effnetB7_fpn, resnext50_fpn
-from inria.models.linknet import LinkNet34, LinkNet152
-from inria.models.unet import UNet
+from . import fpn, unet
 
-from pytorch_toolbelt.modules import encoders as E
-
-__all__ = ['get_model']
+__all__ = ["get_model"]
 
 
-def get_model(model_name: str) -> nn.Module:
+def get_model(model_name: str, dropout=0.0) -> nn.Module:
     registry = {
-        # Unet family
-        'unet': partial(UNet, upsample=False),
-
-        # Linknet family
-        'linknet34': LinkNet34,
-        'linknet152': LinkNet152,
-
         # FPN family
-        'resnet34_fpn': resnet34_fpn,
-        'resnext50_fpn': resnext50_fpn,
-        'resnet101_fpn': resnet101_fpn,
-        'effnetb4_fpn': effnetB4_fpn,
-        'effnetb7_fpn': effnetB7_fpn,
+        "resnet34_fpncat128": fpn.resnet34_fpncat128,
+        "resnet152_fpncat256": fpn.resnet152_fpncat256,
+        "seresnext50_fpncat128": fpn.seresnext50_fpncat128,
+        "effnetB4_fpncat128": fpn.effnetB4_fpncat128,
+        "seresnext101_fpncat256": fpn.seresnext101_fpncat256,
 
+        # UNet
+        "seresnext101_unet64": unet.seresnext101_unet64
     }
 
-    return registry[model_name.lower()]()
+    return registry[model_name.lower()](dropout=dropout)
