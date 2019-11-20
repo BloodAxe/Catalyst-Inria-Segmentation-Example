@@ -299,7 +299,6 @@ def main():
                 image_size=image_size,
                 batch_size=args.batch_size,
                 target_key=OUTPUT_MASK_KEY,
-                activation="sigmoid",
             )
             mask = ((mask > 0.5) * 255).astype(np.uint8)
             name = os.path.join(out_dir, os.path.basename(fname))

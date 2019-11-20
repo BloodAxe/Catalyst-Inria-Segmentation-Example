@@ -43,56 +43,28 @@ class PickModelOutput(nn.Module):
         return output[self.target_key]
 
 
-def predict(
-    model: nn.Module,
-    image: np.ndarray,
-    image_size,
-    tta=None,
-    normalize=A.Normalize(),
-    batch_size=1,
-    target_key=None,
-    activation="sigmoid",
-) -> np.ndarray:
-
-    if target_key is not None:
-        model = PickModelOutput(model, target_key)
+@torch.no_grad()
+def predict(model: nn.Module, image: np.ndarray, image_size, normalize=A.Normalize(), batch_size=1) -> np.ndarray:
 
     tile_step = (image_size[0] // 2, image_size[1] // 2)
 
-    tile_slicer = ImageSlicer(image.shape, image_size, tile_step, weight="pyramid")
+    tile_slicer = ImageSlicer(image.shape, image_size, tile_step)
     tile_merger = CudaTileMerger(tile_slicer.target_shape, 1, tile_slicer.weight)
     patches = tile_slicer.split(image)
 
     transform = A.Compose([normalize, A.Lambda(image=_tensor_from_rgb_image)])
 
-    if tta == "fliplr":
-        model = TTAWrapper(model, fliplr_image2mask)
-
-    if tta == "d4":
-        model = TTAWrapper(model, d4_image2mask)
-
-    if torch.cuda.device_count() > 1:
-        model = nn.DataParallel(model)
-
-    model = model.eval()
-
-    with torch.no_grad():
-        data = list(
-            {"image": patch, "coords": np.array(coords, dtype=np.int)}
-            for (patch, coords) in zip(patches, tile_slicer.crops)
-        )
-        for batch in DataLoader(InMemoryDataset(data, transform), pin_memory=True, batch_size=batch_size):
-            image = batch["image"].cuda(non_blocking=True)
-            coords = batch["coords"]
-            mask_batch = model(image)
-            tile_merger.integrate_batch(mask_batch, coords)
+    data = list(
+        {"image": patch, "coords": np.array(coords, dtype=np.int)}
+        for (patch, coords) in zip(patches, tile_slicer.crops)
+    )
+    for batch in DataLoader(InMemoryDataset(data, transform), pin_memory=True, batch_size=batch_size):
+        image = batch["image"].cuda(non_blocking=True)
+        coords = batch["coords"]
+        mask_batch = model(image)
+        tile_merger.integrate_batch(mask_batch, coords)
 
     mask = tile_merger.merge()
-    if activation == "sigmoid":
-        mask = mask.sigmoid()
-
-    if isinstance(activation, float):
-        mask = F.relu(mask_batch - activation, inplace=True)
 
     mask = np.moveaxis(to_numpy(mask), 0, -1)
     mask = tile_slicer.crop_to_orignal_size(mask)

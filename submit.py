@@ -4,12 +4,14 @@ import cv2
 import numpy as np
 import torch
 from catalyst.utils import load_checkpoint, unpack_checkpoint
+from pytorch_toolbelt.inference.tta import TTAWrapper, d4_image2mask, fliplr_image2mask
+from torch import nn
 
 from tqdm import tqdm
 from pytorch_toolbelt.utils.fs import auto_file, find_in_dir
 
-from inria.dataset import read_inria_image
-from inria.factory import predict
+from inria.dataset import read_inria_image, OUTPUT_MASK_KEY
+from inria.factory import predict, PickModelOutput
 from inria.models import get_model
 
 
@@ -57,16 +59,21 @@ def main():
     model = get_model(args.model)
     unpack_checkpoint(checkpoint, model=model)
 
-    model = model.cuda().eval()
+    if args.tta == "fliplr":
+        model = TTAWrapper(model, fliplr_image2mask)
 
-    mask = predict(
-        model,
-        read_inria_image("sample_color.jpg"),
-        tta=args.tta,
-        image_size=(512, 512),
-        batch_size=args.batch_size,
-        activation="sigmoid",
-    )
+    if args.tta == "d4":
+        model = TTAWrapper(model, d4_image2mask)
+
+    model = nn.Sequential(PickModelOutput(model, OUTPUT_MASK_KEY), nn.Sigmoid())
+
+    model = model.cuda()
+    if torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model)
+
+    model = model.eval()
+
+    mask = predict(model, read_inria_image("sample_color.jpg"), image_size=(512, 512), batch_size=args.batch_size)
     mask = ((mask > 0.5) * 255).astype(np.uint8)
     name = os.path.join(run_dir, "sample_color.jpg")
     cv2.imwrite(name, mask)
@@ -74,9 +81,7 @@ def main():
     test_images = find_in_dir(os.path.join(data_dir, "test", "images"))
     for fname in tqdm(test_images, total=len(test_images)):
         image = read_inria_image(fname)
-        mask = predict(
-            model, image, tta=args.tta, image_size=(512, 512), batch_size=args.batch_size, activation="sigmoid"
-        )
+        mask = predict(model, image, image_size=(512, 512), batch_size=args.batch_size)
         mask = ((mask > 0.5) * 255).astype(np.uint8)
         name = os.path.join(out_dir, os.path.basename(fname))
         cv2.imwrite(name, mask)
