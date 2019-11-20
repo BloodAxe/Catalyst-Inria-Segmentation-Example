@@ -6,6 +6,8 @@ from pytorch_toolbelt.utils.fs import id_from_fname, read_image_as_is
 import pandas as pd
 from tqdm import tqdm
 
+from inria.dataset import TEST_LOCATIONS
+
 
 def split_image(image_fname, output_dir, tile_size, tile_step, image_margin):
     os.makedirs(output_dir, exist_ok=True)
@@ -25,7 +27,7 @@ def split_image(image_fname, output_dir, tile_size, tile_step, image_margin):
 
 
 def cut_dataset_in_patches(data_dir, tile_size, tile_step, image_margin):
-    locations = ["austin", "chicago", "kitsap", "tyrol-w", "vienna"]
+    locations = TEST_LOCATIONS
 
     train_data = []
 

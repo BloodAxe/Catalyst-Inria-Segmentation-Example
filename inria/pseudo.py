@@ -1,7 +1,7 @@
 from catalyst.dl import Callback, CallbackOrder, RunnerState
 from pytorch_toolbelt.utils.catalyst import PseudolabelDatasetMixin
 from pytorch_toolbelt.utils.torch_utils import to_numpy
-
+import numpy as np
 
 class BCEOnlinePseudolabelingCallback2d(Callback):
     """
@@ -72,11 +72,13 @@ class BCEOnlinePseudolabelingCallback2d(Callback):
         for p, sample_index in zip(probs, indexes):
             confident_negatives = p < (1.0 - self.prob_threshold)
             confident_positives = p > self.prob_threshold
-            rest = ~confident_positives & ~confident_positives
+            rest = ~confident_negatives & ~confident_positives
 
+            p = p.copy()
             p[confident_negatives] = 0 + self.label_smoothing
             p[confident_positives] = 1 - self.label_smoothing
             p[rest] = self.unlabeled_class
+            p = np.moveaxis(p, 0, -1)
 
             self.unlabeled_ds.set_target(sample_index, p)
 

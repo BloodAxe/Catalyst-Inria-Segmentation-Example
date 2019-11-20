@@ -24,7 +24,7 @@ from inria.dataset import (
     INPUT_MASK_KEY,
     get_pseudolabeling_dataset,
     get_datasets,
-)
+    UNLABELED_SAMPLE)
 
 from inria.factory import visualize_inria_predictions, predict
 from inria.losses import get_loss
@@ -152,8 +152,14 @@ def main():
         loaders = collections.OrderedDict()
 
         if online_pseudolabeling:
-            unlabeled_train = get_pseudolabeling_dataset(data_dir, image_size=image_size, augmentation=augmentations)
-            unlabeled_label = get_pseudolabeling_dataset(data_dir, image_size=image_size)
+            unlabeled_label = get_pseudolabeling_dataset(data_dir,
+                                                         include_masks=False,
+                                                         image_size=image_size)
+
+            unlabeled_train = get_pseudolabeling_dataset(data_dir,
+                                                         include_masks=True,
+                                                         image_size=image_size,
+                                                         augmentation=augmentations)
 
             train_ds = train_ds + unlabeled_train
 
@@ -164,7 +170,11 @@ def main():
 
             callbacks += [
                 BCEOnlinePseudolabelingCallback2d(
-                    unlabeled_train.targets, pseudolabel_loader="label", prob_threshold=0.9
+                    unlabeled_train,
+                    pseudolabel_loader="label",
+                    prob_threshold=0.9,
+                    output_key=OUTPUT_MASK_KEY,
+                    unlabeled_class=UNLABELED_SAMPLE
                 )
             ]
 
@@ -223,7 +233,7 @@ def main():
         print("Optimizer        :", optimizer_name)
         print("\tLearning rate  :", learning_rate)
         print("\tBatch size     :", batch_size)
-        print("\tCriterion      :", args.criterion)
+        print("\tCriterion      :", criterion_name)
 
         # model training
         runner.train(
