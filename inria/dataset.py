@@ -1,19 +1,18 @@
+import math
 import os
 from typing import List, Callable
 
-import math
-import pandas as pd
 import albumentations as A
 import cv2
 import numpy as np
+import pandas as pd
 from pytorch_toolbelt.inference.tiles import ImageSlicer
 from pytorch_toolbelt.utils import fs
-from pytorch_toolbelt.utils.torch_utils import (
-    tensor_from_rgb_image,
-    tensor_from_mask_image,
-)
+from pytorch_toolbelt.utils.torch_utils import tensor_from_rgb_image, tensor_from_mask_image
 from scipy.ndimage import binary_dilation, binary_fill_holes
-from torch.utils.data import WeightedRandomSampler, DataLoader, Dataset, ConcatDataset
+from torch.utils.data import WeightedRandomSampler, Dataset, ConcatDataset
+
+from .augmentations import *
 
 INPUT_IMAGE_KEY = "image"
 INPUT_IMAGE_ID_KEY = "image_id"
@@ -28,10 +27,12 @@ OUTPUT_MASK_32_KEY = "mask_32"
 
 OUTPUT_CLASS_KEY = "classes"
 
+
 # NOISY SAMPLES
 # chicago27
 # vienna30
 # austin23
+
 
 def read_inria_image(fname):
     image = cv2.imread(fname)
@@ -78,9 +79,7 @@ class InriaImageMaskDataset(Dataset):
         use_edges=False,
     ):
         if len(image_filenames) != len(target_filenames):
-            raise ValueError(
-                "Number of images does not corresponds to number of targets"
-            )
+            raise ValueError("Number of images does not corresponds to number of targets")
 
         self.image_ids = [fs.id_from_fname(fname) for fname in image_filenames]
         self.use_edges = use_edges
@@ -163,33 +162,18 @@ class _InrialTiledImageMaskDataset(Dataset):
 
         self.slicer = ImageSlicer(target_shape, tile_size, tile_step, image_margin)
 
-        if keep_in_mem:
-            self.images = self.slicer.split(image)
-            self.masks = self.slicer.split(mask)
-        else:
-            self.images = None
-            self.masks = None
-
         self.transform = transform
         self.image_ids = [fs.id_from_fname(image_fname)] * len(self.slicer.crops)
-        self.crop_coords_str = [
-            f"[{crop[0]};{crop[1]};{crop[2]};{crop[3]};]" for crop in self.slicer.crops
-        ]
+        self.crop_coords_str = [f"[{crop[0]};{crop[1]};{crop[2]};{crop[3]};]" for crop in self.slicer.crops]
 
     def _get_image(self, index):
-        if self.images is None:
-            image = self.image_loader(self.image_fname)
-            image = self.slicer.cut_patch(image, index)
-        else:
-            image = self.images[index]
+        image = self.image_loader(self.image_fname)
+        image = self.slicer.cut_patch(image, index)
         return image
 
     def _get_mask(self, index):
-        if self.masks is None:
-            mask = self.mask_loader(self.mask_fname)
-            mask = self.slicer.cut_patch(mask, index)
-        else:
-            mask = self.masks[index]
+        mask = self.mask_loader(self.mask_fname)
+        mask = self.slicer.cut_patch(mask, index)
         return mask
 
     def __len__(self):
@@ -202,11 +186,12 @@ class _InrialTiledImageMaskDataset(Dataset):
 
         image = data["image"]
         mask = data["mask"]
-        coarse_mask = cv2.resize(
-            mask,
-            dsize=(mask.shape[1] // 4, mask.shape[0] // 4),
-            interpolation=cv2.INTER_LINEAR,
-        )
+
+        # coarse_mask = cv2.resize(
+        #     mask,
+        #     dsize=(mask.shape[1] // 4, mask.shape[0] // 4),
+        #     interpolation=cv2.INTER_LINEAR,
+        # )
 
         data = {
             INPUT_IMAGE_KEY: tensor_from_rgb_image(image),
@@ -233,9 +218,7 @@ class InrialTiledImageMaskDataset(ConcatDataset):
         **kwargs,
     ):
         if len(image_filenames) != len(target_filenames):
-            raise ValueError(
-                "Number of images does not corresponds to number of targets"
-            )
+            raise ValueError("Number of images does not corresponds to number of targets")
 
         datasets = []
         for image, mask in zip(image_filenames, target_filenames):
@@ -246,210 +229,8 @@ class InrialTiledImageMaskDataset(ConcatDataset):
         super().__init__(datasets)
 
 
-def light_augmentations(image_size, whole_image_input=True, rot_angle=5):
-    if whole_image_input:
-
-        pad_h, pad_w = padding_for_rotation(image_size, rot_angle)
-        crop_height = int(image_size[0] + pad_h * 2)
-        crop_width = int(image_size[1] + pad_w * 2)
-
-        spatial_transform = A.Compose(
-            [
-                # Make random-sized crop with scale [75%..125%] of target size 1.5 larger than target crop to have some space around for
-                # further transforms
-                A.RandomSizedCrop(
-                    (int(crop_height * 0.75), int(crop_height * 1.25)),
-                    crop_height,
-                    crop_width,
-                ),
-                # Apply random rotations
-                A.ShiftScaleRotate(
-                    shift_limit=0,
-                    scale_limit=0,
-                    rotate_limit=rot_angle,
-                    border_mode=cv2.BORDER_CONSTANT,
-                ),
-                # Crop to desired image size
-                A.CenterCrop(image_size[0], image_size[1]),
-            ]
-        )
-    else:
-        spatial_transform = A.Compose(
-            [
-                A.ShiftScaleRotate(
-                    scale_limit=0.5, rotate_limit=15, border_mode=cv2.BORDER_CONSTANT
-                ),
-            ]
-        )
-
-    return A.Compose(
-        [
-            spatial_transform,
-            # D4 Augmentations
-            A.Compose([A.Transpose(), A.RandomRotate90(),]),
-            # Spatial-preserving augmentations:
-            A.OneOf([A.CoarseDropout(), A.GaussNoise(),]),
-            A.OneOf(
-                [
-                    A.RandomBrightnessContrast(),
-                    A.CLAHE(),
-                    A.HueSaturationValue(),
-                    A.RGBShift(),
-                    A.RandomGamma(),
-                ]
-            ),
-            A.Normalize(),
-        ]
-    )
-
-
-def medium_augmentations(image_size, whole_image_input=True, rot_angle=15):
-    if whole_image_input:
-
-        pad_h, pad_w = padding_for_rotation(image_size, rot_angle)
-        crop_height = int(image_size[0] + pad_h * 2)
-        crop_width = int(image_size[1] + pad_w * 2)
-
-        spatial_transform = A.Compose(
-            [
-                # Make random-sized crop with scale [75%..125%] of target size 1.5 larger than target crop to have some space around for
-                # further transforms
-                A.RandomSizedCrop(
-                    (int(crop_height * 0.75), int(crop_height * 1.25)),
-                    crop_height,
-                    crop_width,
-                ),
-                # Apply random rotations
-                A.ShiftScaleRotate(
-                    shift_limit=0,
-                    scale_limit=0,
-                    rotate_limit=rot_angle,
-                    border_mode=cv2.BORDER_CONSTANT,
-                ),
-                # Crop to desired image size
-                A.CenterCrop(image_size[0], image_size[1]),
-            ]
-        )
-    else:
-        spatial_transform = A.Compose(
-            [
-                A.ShiftScaleRotate(
-                    scale_limit=0.25,
-                    rotate_limit=rot_angle,
-                    border_mode=cv2.BORDER_CONSTANT,
-                ),
-            ]
-        )
-
-    return A.Compose(
-        [
-            spatial_transform,
-            # Add occasion blur/sharpening
-            A.OneOf([A.GaussianBlur(), A.MotionBlur(), A.IAASharpen()]),
-            # D4 Augmentations
-            A.Compose([A.Transpose(), A.RandomRotate90(),]),
-            # Spatial-preserving augmentations:
-            A.OneOf([A.CoarseDropout(), A.MaskDropout(max_objects=3), A.NoOp()]),
-            A.GaussNoise(),
-            A.OneOf(
-                [
-                    A.RandomBrightnessContrast(),
-                    A.CLAHE(),
-                    A.HueSaturationValue(),
-                    A.RGBShift(),
-                    A.RandomGamma(),
-                ]
-            ),
-            # Weather effects
-            A.OneOf(
-                [A.RandomFog(fog_coef_lower=0.01, fog_coef_upper=0.3, p=0.1), A.NoOp()]
-            ),
-            A.Normalize(),
-        ]
-    )
-
-
-def hard_augmentations(image_size, whole_image_input=True, rot_angle=45):
-    if whole_image_input:
-        pad_h, pad_w = padding_for_rotation(image_size, rot_angle)
-        crop_height = int(image_size[0] + pad_h * 2)
-        crop_width = int(image_size[1] + pad_w * 2)
-
-        spatial_transform = A.Compose(
-            [
-                # Make random-sized crop with scale [50%..200%] of crop size to have some space around for
-                # further transforms
-                A.RandomSizedCrop(
-                    (int(crop_height * 0.5), int(crop_height * 2)),
-                    crop_height,
-                    crop_width,
-                ),
-                # Apply random rotations
-                A.OneOf(
-                    [
-                        A.ShiftScaleRotate(
-                            shift_limit=0,
-                            scale_limit=0,
-                            rotate_limit=rot_angle,
-                            border_mode=cv2.BORDER_CONSTANT,
-                        ),
-                        A.IAAAffine(shear=0.1, rotate=rot_angle, mode="constant"),
-                        A.NoOp(),
-                    ]
-                ),
-                # Crop to desired image size
-                A.CenterCrop(image_size[0], image_size[1]),
-            ]
-        )
-    else:
-        spatial_transform = A.Compose(
-            [
-                A.ShiftScaleRotate(
-                    scale_limit=0.5, rotate_limit=45, border_mode=cv2.BORDER_CONSTANT
-                ),
-                A.NoOp(),
-            ]
-        )
-
-    return A.Compose(
-        [
-            spatial_transform,
-            # Add occasion blur
-            A.OneOf(
-                [
-                    A.GaussianBlur(),
-                    A.GaussNoise(),
-                    A.IAAAdditiveGaussianNoise(),
-                    A.NoOp(),
-                ]
-            ),
-            # D4 Augmentations
-            A.Compose([A.Transpose(), A.RandomRotate90(),]),
-            A.OneOf([A.CoarseDropout(), A.MaskDropout(max_objects=3), A.NoOp()]),
-            # Spatial-preserving augmentations:
-            A.OneOf(
-                [
-                    A.RandomBrightnessContrast(),
-                    A.CLAHE(),
-                    A.HueSaturationValue(),
-                    A.RGBShift(),
-                    A.RandomGamma(),
-                    A.NoOp(),
-                ]
-            ),
-            # Weather effects
-            A.OneOf(
-                [A.RandomFog(fog_coef_lower=0.01, fog_coef_upper=0.3, p=0.1), A.NoOp()]
-            ),
-            A.Normalize(),
-        ]
-    )
-
-
-def get_dataloaders(
+def get_datasets(
     data_dir: str,
-    batch_size=16,
-    num_workers=4,
     image_size=(224, 224),
     augmentation="hard",
     train_mode="random",
@@ -460,8 +241,6 @@ def get_dataloaders(
     """
     Create train and validation data loaders
     :param data_dir: Inria dataset directory
-    :param batch_size:
-    :param num_workers:
     :param fast: Fast training model. Use only one image per location for training and one image per location for validation
     :param image_size: Size of image crops during training & validation
     :param use_edges: If True, adds 'edge' target mask
@@ -514,37 +293,17 @@ def get_dataloaders(
                     train_data.append(f"{loc}{i}")
                     train_data_weights.append(weight)
 
-        train_img = [
-            os.path.join(data_dir, "train", "images", f"{fname}.tif")
-            for fname in train_data
-        ]
-        valid_img = [
-            os.path.join(data_dir, "train", "images", f"{fname}.tif")
-            for fname in valid_data
-        ]
+        train_img = [os.path.join(data_dir, "train", "images", f"{fname}.tif") for fname in train_data]
+        valid_img = [os.path.join(data_dir, "train", "images", f"{fname}.tif") for fname in valid_data]
 
-        train_mask = [
-            os.path.join(data_dir, "train", "gt", f"{fname}.tif")
-            for fname in train_data
-        ]
-        valid_mask = [
-            os.path.join(data_dir, "train", "gt", f"{fname}.tif")
-            for fname in valid_data
-        ]
+        train_mask = [os.path.join(data_dir, "train", "gt", f"{fname}.tif") for fname in train_data]
+        valid_mask = [os.path.join(data_dir, "train", "gt", f"{fname}.tif") for fname in valid_data]
 
         trainset = InriaImageMaskDataset(
-            train_img,
-            train_mask,
-            use_edges=use_edges,
-            transform=train_transform,
-            keep_in_mem=False,
+            train_img, train_mask, use_edges=use_edges, transform=train_transform, keep_in_mem=False
         )
-        num_train_samples = int(
-            len(trainset) * (5000 * 5000) / (image_size[0] * image_size[1])
-        )
-        train_sampler = WeightedRandomSampler(
-            np.array(train_data_weights), num_train_samples
-        )
+        num_train_samples = int(len(trainset) * (5000 * 5000) / (image_size[0] * image_size[1]))
+        train_sampler = WeightedRandomSampler(np.array(train_data_weights), num_train_samples)
 
         validset = InrialTiledImageMaskDataset(
             valid_img,
@@ -568,48 +327,22 @@ def get_dataloaders(
         valid_mask = inria_tiles[inria_tiles["train"] == 0]["mask"]
 
         trainset = InriaImageMaskDataset(
-            train_img,
-            train_mask,
-            use_edges=use_edges,
-            transform=train_transform,
-            keep_in_mem=False,
+            train_img, train_mask, use_edges=use_edges, transform=train_transform, keep_in_mem=False
         )
 
         validset = InriaImageMaskDataset(
-            valid_img,
-            valid_mask,
-            use_edges=use_edges,
-            transform=valid_transform,
-            keep_in_mem=False,
+            valid_img, valid_mask, use_edges=use_edges, transform=valid_transform, keep_in_mem=False
         )
         train_sampler = None
     else:
         raise ValueError(train_mode)
 
     if sanity_check:
-        first_batch = [trainset[i] for i in range(batch_size)]
-        trainloader = DataLoader(
-            first_batch * 50, batch_size=batch_size, pin_memory=True
-        )
-        validloader = DataLoader(first_batch, batch_size=batch_size, pin_memory=True)
-        return trainloader, validloader
+        first_batch = [trainset[i] for i in range(32)]
+        return first_batch * 50, first_batch, None
 
-    trainloader = DataLoader(
-        trainset,
-        batch_size=batch_size,
-        num_workers=num_workers,
-        pin_memory=True,
-        drop_last=True,
-        shuffle=train_sampler is None,
-        sampler=train_sampler,
-    )
+    return trainset, validset, train_sampler
 
-    validloader = DataLoader(
-        validset,
-        batch_size=batch_size,
-        num_workers=num_workers,
-        pin_memory=True,
-        shuffle=False,
-    )
 
-    return trainloader, validloader
+def get_pseudolabeling_dataset(data_dir: str, image_size=(224, 224), augmentation="hard"):
+    return None

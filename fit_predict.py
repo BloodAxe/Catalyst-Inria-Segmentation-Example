@@ -10,29 +10,28 @@ import numpy as np
 from catalyst.dl import SupervisedRunner, EarlyStoppingCallback, CriterionCallback
 from catalyst.utils import load_checkpoint, unpack_checkpoint
 from pytorch_toolbelt.utils import fs
-from pytorch_toolbelt.utils.catalyst import (
-    ShowPolarBatchesCallback,
-    PixelAccuracyCallback,
-)
+from pytorch_toolbelt.utils.catalyst import ShowPolarBatchesCallback, PixelAccuracyCallback
 from pytorch_toolbelt.utils.random import set_manual_seed
-from pytorch_toolbelt.utils.torch_utils import (
-    count_parameters,
-    transfer_weights,
-)
+from pytorch_toolbelt.utils.torch_utils import count_parameters, transfer_weights
 from torch import nn
+from torch.utils.data import DataLoader
 from tqdm import tqdm
 
 from inria.dataset import (
-    get_dataloaders,
     read_inria_image,
     INPUT_IMAGE_KEY,
     OUTPUT_MASK_KEY,
     INPUT_MASK_KEY,
+    get_pseudolabeling_dataset,
+    get_datasets,
 )
-from inria.factory import get_loss, visualize_inria_predictions, predict
+
+from inria.factory import visualize_inria_predictions, predict
+from inria.losses import get_loss
 from inria.metric import JaccardMetricPerImage
 from inria.models import get_model
 from inria.optim import get_optimizer
+from inria.pseudo import BCEOnlinePseudolabelingCallback2d
 from inria.scheduler import get_scheduler
 
 
@@ -41,45 +40,23 @@ def main():
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("--fast", action="store_true")
     parser.add_argument(
-        "-dd",
-        "--data-dir",
-        type=str,
-        required=True,
-        help="Data directory for INRIA sattelite dataset",
+        "-dd", "--data-dir", type=str, required=True, help="Data directory for INRIA sattelite dataset"
     )
-    parser.add_argument(
-        "-m", "--model", type=str, default="resnet34_fpncat128", help=""
-    )
-    parser.add_argument(
-        "-b",
-        "--batch-size",
-        type=int,
-        default=8,
-        help="Batch Size during training, e.g. -b 64",
-    )
+    parser.add_argument("-m", "--model", type=str, default="resnet34_fpncat128", help="")
+    parser.add_argument("-b", "--batch-size", type=int, default=8, help="Batch Size during training, e.g. -b 64")
     parser.add_argument("-e", "--epochs", type=int, default=100, help="Epoch to run")
     # parser.add_argument('-es', '--early-stopping', type=int, default=None, help='Maximum number of epochs without improvement')
     # parser.add_argument('-fe', '--freeze-encoder', type=int, default=0, help='Freeze encoder parameters for N epochs')
     # parser.add_argument('-ft', '--fine-tune', action='store_true')
-    parser.add_argument(
-        "-lr", "--learning-rate", type=float, default=1e-3, help="Initial learning rate"
-    )
+    parser.add_argument("-lr", "--learning-rate", type=float, default=1e-3, help="Initial learning rate")
     parser.add_argument("-l", "--criterion", type=str, default="bce", help="Criterion")
+    parser.add_argument("-o", "--optimizer", default="Adam", help="Name of the optimizer")
     parser.add_argument(
-        "-o", "--optimizer", default="Adam", help="Name of the optimizer"
-    )
-    parser.add_argument(
-        "-c",
-        "--checkpoint",
-        type=str,
-        default=None,
-        help="Checkpoint filename to use as initial model weights",
+        "-c", "--checkpoint", type=str, default=None, help="Checkpoint filename to use as initial model weights"
     )
     parser.add_argument("-w", "--workers", default=8, type=int, help="Num workers")
     parser.add_argument("-a", "--augmentations", default="hard", type=str, help="")
-    parser.add_argument(
-        "-tta", "--tta", default=None, type=str, help="Type of TTA to use [fliplr, d4]"
-    )
+    parser.add_argument("-tta", "--tta", default=None, type=str, help="Type of TTA to use [fliplr, d4]")
     parser.add_argument("-tm", "--train-mode", default="random", type=str, help="")
     parser.add_argument("--run-mode", default="fit_predict", type=str, help="")
     parser.add_argument("--transfer", default=None, type=str, help="")
@@ -87,9 +64,8 @@ def main():
     parser.add_argument("--size", default=512, type=int)
     parser.add_argument("-s", "--scheduler", default="multistep", type=str, help="")
     parser.add_argument("-x", "--experiment", default=None, type=str, help="")
-    parser.add_argument(
-        "-d", "--dropout", default=0.0, type=float, help="Dropout before head layer"
-    )
+    parser.add_argument("-d", "--dropout", default=0.0, type=float, help="Dropout before head layer")
+    parser.add_argument("--opl", action="store_true")
 
     args = parser.parse_args()
     set_manual_seed(args.seed)
@@ -111,6 +87,8 @@ def main():
     scheduler_name = args.scheduler
     experiment = args.experiment
     dropout = args.dropout
+    online_pseudolabeling = args.opl
+    criterion_name = args.criterion
 
     run_train = run_mode == "fit_predict" or run_mode == "fit"
     run_predict = run_mode == "fit_predict" or run_mode == "predict"
@@ -151,25 +129,57 @@ def main():
         log_dir = os.path.dirname(os.path.dirname(fs.auto_file(args.checkpoint)))
 
     if run_train:
-        criterion = get_loss(args.criterion)
-        optimizer = get_optimizer(optimizer_name, model.parameters(), learning_rate)
 
-        train_loader, valid_loader = get_dataloaders(
-            data_dir=data_dir,
-            batch_size=batch_size,
-            num_workers=num_workers,
-            image_size=image_size,
-            augmentation=augmentations,
-            train_mode=train_mode,
-            fast=fast,
+        if online_pseudolabeling:
+            criterion_name = "soft_bce"
+
+        criterion = get_loss(criterion_name)
+        optimizer = get_optimizer(optimizer_name, model.parameters(), learning_rate)
+        callbacks = [
+            CriterionCallback(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY),
+            PixelAccuracyCallback(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY),
+            JaccardMetricPerImage(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY),
+            # OptimalThreshold(),
+            ShowPolarBatchesCallback(visualize_inria_predictions, metric="accuracy", minimize=False),
+            EarlyStoppingCallback(30, metric="jaccard", minimize=False),
+        ]
+
+        train_ds, valid_ds, train_sampler = get_datasets(
+            data_dir=data_dir, image_size=image_size, augmentation=augmentations, train_mode=train_mode, fast=fast
         )
 
         loaders = collections.OrderedDict()
-        loaders["train"] = train_loader
-        loaders["valid"] = valid_loader
+
+        if online_pseudolabeling:
+            unlabeled_train = get_pseudolabeling_dataset(data_dir, image_size=image_size, augmentation=augmentations)
+            unlabeled_eval = get_pseudolabeling_dataset(data_dir, image_size=image_size)
+
+            train_ds = train_ds + unlabeled_train
+
+            loaders["label"] = DataLoader(unlabeled_eval, shuffle=False, batch_size=batch_size)
+
+            callbacks += [
+                BCEOnlinePseudolabelingCallback2d(
+                    unlabeled_train.targets, pseudolabel_loader="label", prob_threshold=0.9
+                )
+            ]
+
+        loaders["train"] = train_loader = DataLoader(
+            train_ds,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            pin_memory=True,
+            drop_last=True,
+            shuffle=train_sampler is None,
+            sampler=train_sampler,
+        )
+
+        loaders["valid"] = valid_loader = DataLoader(
+            valid_ds, batch_size=batch_size, num_workers=num_workers, pin_memory=True, shuffle=False
+        )
 
         current_time = datetime.now().strftime("%b%d_%H_%M")
-        checkpoint_prefix = f"{current_time}_{args.model}_edge_{args.criterion}"
+        checkpoint_prefix = f"{current_time}_{args.model}_{criterion_name}"
 
         if fp16:
             checkpoint_prefix += "_fp16"
@@ -184,14 +194,7 @@ def main():
         os.makedirs(log_dir, exist_ok=False)
 
         scheduler = get_scheduler(
-            scheduler_name,
-            optimizer,
-            lr=learning_rate,
-            num_epochs=num_epochs,
-            batches_in_epoch=len(train_loader),
-        )
-        criterion_callback = CriterionCallback(
-            input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY,
+            scheduler_name, optimizer, lr=learning_rate, num_epochs=num_epochs, batches_in_epoch=len(train_loader)
         )
 
         # model runner
@@ -206,8 +209,8 @@ def main():
         print("\tData dir       :", data_dir)
         print("\tLog dir        :", log_dir)
         print("\tAugmentations  :", augmentations)
-        print("\tTrain size     :", len(train_loader), len(train_loader.dataset))
-        print("\tValid size     :", len(valid_loader), len(valid_loader.dataset))
+        print("\tTrain size     :", len(train_loader), len(train_ds))
+        print("\tValid size     :", len(valid_loader), len(valid_ds))
         print("Model            :", model_name)
         print("\tParameters     :", count_parameters(model))
         print("\tImage size     :", image_size)
@@ -223,20 +226,7 @@ def main():
             criterion=criterion,
             optimizer=optimizer,
             scheduler=scheduler,
-            callbacks=[
-                criterion_callback,
-                PixelAccuracyCallback(
-                    input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY
-                ),
-                JaccardMetricPerImage(
-                    input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY
-                ),
-                # OptimalThreshold(),
-                ShowPolarBatchesCallback(
-                    visualize_inria_predictions, metric="accuracy", minimize=False
-                ),
-                EarlyStoppingCallback(30, metric="jaccard", minimize=False),
-            ],
+            callbacks=callbacks,
             loaders=loaders,
             logdir=log_dir,
             num_epochs=num_epochs,

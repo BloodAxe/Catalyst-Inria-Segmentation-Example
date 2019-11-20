@@ -6,15 +6,10 @@ from pytorch_toolbelt.modules.encoders import EncoderModule
 from torch import nn
 from torch.nn import functional as F
 
-from ..dataset import (
-    OUTPUT_MASK_4_KEY,
-    OUTPUT_MASK_8_KEY,
-    OUTPUT_MASK_16_KEY,
-    OUTPUT_MASK_32_KEY,
-    OUTPUT_MASK_KEY,
-)
+from ..dataset import OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY, OUTPUT_MASK_32_KEY, OUTPUT_MASK_KEY
 
-__all__=["seresnext101_unet256"]
+__all__ = ["seresnext101_unet256"]
+
 
 class UnetSegmentationModel(nn.Module):
     def __init__(
@@ -30,9 +25,7 @@ class UnetSegmentationModel(nn.Module):
         self.encoder = encoder
 
         self.decoder = UNetDecoder(
-            feature_maps=encoder.output_filters,
-            decoder_features=unet_channels,
-            mask_channels=num_classes,
+            feature_maps=encoder.output_filters, decoder_features=unet_channels, mask_channels=num_classes
         )
 
         self.full_size_mask = full_size_mask
@@ -45,9 +38,7 @@ class UnetSegmentationModel(nn.Module):
         mask, dsv = self.decoder(enc_features)
 
         if self.full_size_mask:
-            mask = F.interpolate(
-                mask, size=x.size()[2:], mode="bilinear", align_corners=False
-            )
+            mask = F.interpolate(mask, size=x.size()[2:], mode="bilinear", align_corners=False)
             mask = unpad_image_tensor(mask, pad)
 
         output = {
@@ -63,6 +54,4 @@ class UnetSegmentationModel(nn.Module):
 
 def seresnext101_unet64(num_classes=1, dropout=0.0):
     encoder = E.SEResNeXt101Encoder()
-    return UnetSegmentationModel(
-        encoder, num_classes=num_classes, unet_channels=64, dropout=dropout
-    )
+    return UnetSegmentationModel(encoder, num_classes=num_classes, unet_channels=64, dropout=dropout)

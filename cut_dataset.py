@@ -38,21 +38,11 @@ def cut_dataset_in_patches(data_dir, tile_size, tile_step, image_margin):
         for i in range(6, 37):
             train_data.append(f"{loc}{i}")
 
-    train_imgs = [
-        os.path.join(data_dir, "train", "images", f"{fname}.tif")
-        for fname in train_data
-    ]
-    valid_imgs = [
-        os.path.join(data_dir, "train", "images", f"{fname}.tif")
-        for fname in valid_data
-    ]
+    train_imgs = [os.path.join(data_dir, "train", "images", f"{fname}.tif") for fname in train_data]
+    valid_imgs = [os.path.join(data_dir, "train", "images", f"{fname}.tif") for fname in valid_data]
 
-    train_masks = [
-        os.path.join(data_dir, "train", "gt", f"{fname}.tif") for fname in train_data
-    ]
-    valid_masks = [
-        os.path.join(data_dir, "train", "gt", f"{fname}.tif") for fname in valid_data
-    ]
+    train_masks = [os.path.join(data_dir, "train", "gt", f"{fname}.tif") for fname in train_data]
+    valid_masks = [os.path.join(data_dir, "train", "gt", f"{fname}.tif") for fname in valid_data]
 
     images_dir = os.path.join(data_dir, "train_tiles", "images")
     masks_dir = os.path.join(data_dir, "train_tiles", "gt")
@@ -62,50 +52,34 @@ def cut_dataset_in_patches(data_dir, tile_size, tile_step, image_margin):
     train_flag = []
 
     for train_img in tqdm(train_imgs, total=len(train_imgs), desc="train_imgs"):
-        img_tiles = split_image(
-            train_img, images_dir, tile_size, tile_step, image_margin
-        )
+        img_tiles = split_image(train_img, images_dir, tile_size, tile_step, image_margin)
         all_image_tiles.extend(img_tiles)
         train_flag.extend([1] * len(img_tiles))
 
     for train_msk in tqdm(train_masks, total=len(train_masks), desc="train_masks"):
-        msk_tiles = split_image(
-            train_msk, masks_dir, tile_size, tile_step, image_margin
-        )
+        msk_tiles = split_image(train_msk, masks_dir, tile_size, tile_step, image_margin)
         all_mask_tiles.extend(msk_tiles)
 
     for valid_img in tqdm(valid_imgs, total=len(valid_imgs), desc="valid_imgs"):
-        img_tiles = split_image(
-            valid_img, images_dir, tile_size, tile_size, image_margin
-        )
+        img_tiles = split_image(valid_img, images_dir, tile_size, tile_size, image_margin)
         all_image_tiles.extend(img_tiles)
         train_flag.extend([0] * len(img_tiles))
 
     for valid_msk in tqdm(valid_masks, total=len(valid_masks), desc="valid_masks"):
-        msk_tiles = split_image(
-            valid_msk, masks_dir, tile_size, tile_size, image_margin
-        )
+        msk_tiles = split_image(valid_msk, masks_dir, tile_size, tile_size, image_margin)
         all_mask_tiles.extend(msk_tiles)
 
-    return pd.DataFrame.from_dict(
-        {"image": all_image_tiles, "mask": all_mask_tiles, "train": train_flag}
-    )
+    return pd.DataFrame.from_dict({"image": all_image_tiles, "mask": all_mask_tiles, "train": train_flag})
 
 
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "-dd",
-        "--data-dir",
-        type=str,
-        required=True,
-        help="Data directory for INRIA sattelite dataset",
+        "-dd", "--data-dir", type=str, required=True, help="Data directory for INRIA sattelite dataset"
     )
     args = parser.parse_args()
 
-    df = cut_dataset_in_patches(
-        args.data_dir, tile_size=(512, 512), tile_step=(256, 256), image_margin=0
-    )
+    df = cut_dataset_in_patches(args.data_dir, tile_size=(512, 512), tile_step=(256, 256), image_margin=0)
     df.to_csv("inria_tiles.csv")
 
 

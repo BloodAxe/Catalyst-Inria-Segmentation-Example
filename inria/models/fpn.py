@@ -6,13 +6,7 @@ from pytorch_toolbelt.modules.encoders import EncoderModule
 from torch import nn
 from torch.nn import functional as F
 
-from ..dataset import (
-    OUTPUT_MASK_4_KEY,
-    OUTPUT_MASK_8_KEY,
-    OUTPUT_MASK_16_KEY,
-    OUTPUT_MASK_32_KEY,
-    OUTPUT_MASK_KEY,
-)
+from ..dataset import OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY, OUTPUT_MASK_32_KEY, OUTPUT_MASK_KEY
 
 __all__ = [
     "FPNSumSegmentationModel",
@@ -58,9 +52,7 @@ class FPNSumSegmentationModel(nn.Module):
         mask, dsv = self.decoder(enc_features)
 
         if self.full_size_mask:
-            mask = F.interpolate(
-                mask, size=x.size()[2:], mode="bilinear", align_corners=False
-            )
+            mask = F.interpolate(mask, size=x.size()[2:], mode="bilinear", align_corners=False)
             mask = unpad_image_tensor(mask, pad)
 
         output = {
@@ -105,9 +97,7 @@ class FPNCatSegmentationModel(nn.Module):
         mask, dsv = self.decoder(enc_features)
 
         if self.full_size_mask:
-            mask = F.interpolate(
-                mask, size=x.size()[2:], mode="bilinear", align_corners=False
-            )
+            mask = F.interpolate(mask, size=x.size()[2:], mode="bilinear", align_corners=False)
             mask = unpad_image_tensor(mask, pad)
 
         output = {
@@ -123,23 +113,17 @@ class FPNCatSegmentationModel(nn.Module):
 
 def resnet34_fpncat128(num_classes=1, dropout=0.0):
     encoder = E.Resnet34Encoder()
-    return FPNCatSegmentationModel(
-        encoder, num_classes=num_classes, fpn_channels=128, dropout=dropout
-    )
+    return FPNCatSegmentationModel(encoder, num_classes=num_classes, fpn_channels=128, dropout=dropout)
 
 
 def seresnext50_fpncat128(num_classes=1, dropout=0.0):
     encoder = E.SEResNeXt50Encoder()
-    return FPNCatSegmentationModel(
-        encoder, num_classes=num_classes, fpn_channels=128, dropout=dropout
-    )
+    return FPNCatSegmentationModel(encoder, num_classes=num_classes, fpn_channels=128, dropout=dropout)
 
 
 def seresnext101_fpncat256(num_classes=1, dropout=0.0):
     encoder = E.SEResNeXt101Encoder()
-    return FPNCatSegmentationModel(
-        encoder, num_classes=num_classes, fpn_channels=256, dropout=dropout
-    )
+    return FPNCatSegmentationModel(encoder, num_classes=num_classes, fpn_channels=256, dropout=dropout)
 
 def seresnext101_fpnsum256(num_classes=1, dropout=0.0):
     encoder = E.SEResNeXt101Encoder()
@@ -150,13 +134,9 @@ def seresnext101_fpnsum256(num_classes=1, dropout=0.0):
 
 def resnet152_fpncat256(num_classes=1, dropout=0.0):
     encoder = E.Resnet152Encoder()
-    return FPNCatSegmentationModel(
-        encoder, num_classes=num_classes, fpn_channels=256, dropout=dropout
-    )
+    return FPNCatSegmentationModel(encoder, num_classes=num_classes, fpn_channels=256, dropout=dropout)
 
 
 def effnetB4_fpncat128(num_classes=1, dropout=0.0):
     encoder = E.EfficientNetB4Encoder(abn_params={"activation": "swish"})
-    return FPNCatSegmentationModel(
-        encoder, num_classes=num_classes, fpn_channels=128, dropout=dropout
-    )
+    return FPNCatSegmentationModel(encoder, num_classes=num_classes, fpn_channels=128, dropout=dropout)

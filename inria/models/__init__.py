@@ -17,7 +17,7 @@ def get_model(model_name: str, dropout=0.0) -> nn.Module:
         "seresnext101_fpnsum256": fpn.seresnext101_fpnsum256,
 
         # UNet
-        "seresnext101_unet64": unet.seresnext101_unet64
+        "seresnext101_unet64": unet.seresnext101_unet64,
     }
 
     return registry[model_name.lower()](dropout=dropout)

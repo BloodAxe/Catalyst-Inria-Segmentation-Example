@@ -17,9 +17,7 @@ def compute_boundary_mask(mask: np.ndarray) -> np.ndarray:
     return diff.astype(np.uint8)
 
 
-mask = cv2.imread(
-    "d:\\datasets\\inria\\train\\gt\\chicago18.tif", cv2.IMREAD_GRAYSCALE
-)[:1024, :1024]
+mask = cv2.imread("d:\\datasets\\inria\\train\\gt\\chicago18.tif", cv2.IMREAD_GRAYSCALE)[:1024, :1024]
 edge = compute_boundary_mask(mask)
 zero = np.zeros_like(mask)
 

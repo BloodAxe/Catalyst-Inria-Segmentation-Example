@@ -73,9 +73,7 @@ class JaccardMetricPerImage(Callback):
         # logger.add_scalar(f"{self.prefix}/all", metric, global_step=state.epoch)
 
         for location, ious in ious_per_location.items():
-            state.metrics.epoch_values[state.loader_name][
-                f"{self.prefix}/{location}"
-            ] = float(np.mean(ious))
+            state.metrics.epoch_values[state.loader_name][f"{self.prefix}/{location}"] = float(np.mean(ious))
             # logger.add_scalar(f"{self.prefix}/{location}", metric, global_step=state.epoch)
 
 
@@ -102,18 +100,12 @@ class OptimalThreshold(Callback):
         self.image_id_key = image_id_key
         self.thresholds = np.arange(-2, 2, 0.01)
         self.scores_per_image = defaultdict(
-            lambda: {
-                "intersection": np.zeros_like(self.thresholds),
-                "union": np.zeros_like(self.thresholds),
-            }
+            lambda: {"intersection": np.zeros_like(self.thresholds), "union": np.zeros_like(self.thresholds)}
         )
 
     def on_loader_start(self, state):
         self.scores_per_image = defaultdict(
-            lambda: {
-                "intersection": np.zeros_like(self.thresholds),
-                "union": np.zeros_like(self.thresholds),
-            }
+            lambda: {"intersection": np.zeros_like(self.thresholds), "union": np.zeros_like(self.thresholds)}
         )
 
     def on_batch_end(self, state: RunnerState):
@@ -133,12 +125,8 @@ class OptimalThreshold(Callback):
             intersection = torch.sum(targets * outputs_i, dim=1)
             union = torch.sum(targets, dim=1) + torch.sum(outputs_i, dim=1)
 
-            for img_id, img_intersection, img_union in zip(
-                image_id, intersection, union
-            ):
-                self.scores_per_image[img_id]["intersection"][i] += float(
-                    img_intersection
-                )
+            for img_id, img_intersection, img_union in zip(image_id, intersection, union):
+                self.scores_per_image[img_id]["intersection"][i] += float(img_intersection)
                 self.scores_per_image[img_id]["union"][i] += float(img_union)
 
     def on_loader_end(self, state: RunnerState):
@@ -159,12 +147,8 @@ class OptimalThreshold(Callback):
         iou_at_threshold = iou[threshold_index]
         threshold_value = self.thresholds[threshold_index]
 
-        state.metrics.epoch_values[state.loader_name][self.prefix] = float(
-            threshold_value
-        )
-        state.metrics.epoch_values[state.loader_name][
-            self.prefix + "/" + "iou"
-        ] = float(iou_at_threshold)
+        state.metrics.epoch_values[state.loader_name][self.prefix] = float(threshold_value)
+        state.metrics.epoch_values[state.loader_name][self.prefix + "/" + "iou"] = float(iou_at_threshold)
 
         logger = get_tensorboard_logger(state)
         logger.add_histogram(self.prefix + "/" + "iou", iou, global_step=state.epoch)

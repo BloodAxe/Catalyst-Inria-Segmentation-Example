@@ -16,9 +16,7 @@ from inria.models import get_model
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("-m", "--model", type=str, default="unet", help="")
-    parser.add_argument(
-        "-dd", "--data-dir", type=str, default=None, required=True, help="Data dir"
-    )
+    parser.add_argument("-dd", "--data-dir", type=str, default=None, required=True, help="Data dir")
     parser.add_argument(
         "-c",
         "--checkpoint",
@@ -27,12 +25,8 @@ def main():
         required=True,
         help="Checkpoint filename to use as initial model weights",
     )
-    parser.add_argument(
-        "-b", "--batch-size", type=int, default=16, help="Batch size for inference"
-    )
-    parser.add_argument(
-        "-tta", "--tta", default=None, type=str, help="Type of TTA to use [fliplr, d4]"
-    )
+    parser.add_argument("-b", "--batch-size", type=int, default=16, help="Batch size for inference")
+    parser.add_argument("-tta", "--tta", default=None, type=str, help="Type of TTA to use [fliplr, d4]")
     args = parser.parse_args()
 
     data_dir = args.data_dir
@@ -81,12 +75,7 @@ def main():
     for fname in tqdm(test_images, total=len(test_images)):
         image = read_inria_image(fname)
         mask = predict(
-            model,
-            image,
-            tta=args.tta,
-            image_size=(512, 512),
-            batch_size=args.batch_size,
-            activation="sigmoid",
+            model, image, tta=args.tta, image_size=(512, 512), batch_size=args.batch_size, activation="sigmoid"
         )
         mask = ((mask > 0.5) * 255).astype(np.uint8)
         name = os.path.join(out_dir, os.path.basename(fname))

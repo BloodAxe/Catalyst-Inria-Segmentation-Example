@@ -5,39 +5,15 @@ import albumentations as A
 import cv2
 import numpy as np
 import torch
-from pytorch_toolbelt import losses as L
 from pytorch_toolbelt.inference.tiles import CudaTileMerger, ImageSlicer
 from pytorch_toolbelt.inference.tta import TTAWrapper, fliplr_image2mask, d4_image2mask
-from pytorch_toolbelt.utils.torch_utils import (
-    tensor_from_rgb_image,
-    to_numpy,
-    rgb_image_from_tensor,
-)
+from pytorch_toolbelt.utils.torch_utils import tensor_from_rgb_image, to_numpy, rgb_image_from_tensor
 from torch import nn
-from torch.nn import BCEWithLogitsLoss
 from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
-from inria.dataset import (
-    INPUT_IMAGE_KEY,
-    INPUT_MASK_KEY,
-    INPUT_IMAGE_ID_KEY,
-    OUTPUT_MASK_KEY,
-)
-
-
-def get_loss(loss_name: str, **kwargs):
-    if loss_name.lower() == "bce":
-        return BCEWithLogitsLoss(**kwargs)
-
-    if loss_name.lower() == "focal":
-        return L.BinaryFocalLoss(alpha=None, gamma=1.5, **kwargs)
-
-    if loss_name.lower() == "reduced_focal":
-        return L.BinaryFocalLoss(alpha=None, gamma=1.5, reduced=True, **kwargs)
-
-    raise KeyError(loss_name)
+from inria.dataset import INPUT_IMAGE_KEY, INPUT_MASK_KEY, INPUT_IMAGE_ID_KEY, OUTPUT_MASK_KEY
 
 
 class InMemoryDataset(Dataset):
@@ -77,7 +53,6 @@ def predict(
     target_key=None,
     activation="sigmoid",
 ) -> np.ndarray:
-    model.eval()
 
     if target_key is not None:
         model = PickModelOutput(model, target_key)
@@ -106,9 +81,7 @@ def predict(
             {"image": patch, "coords": np.array(coords, dtype=np.int)}
             for (patch, coords) in zip(patches, tile_slicer.crops)
         )
-        for batch in DataLoader(
-            InMemoryDataset(data, transform), pin_memory=True, batch_size=batch_size
-        ):
+        for batch in DataLoader(InMemoryDataset(data, transform), pin_memory=True, batch_size=batch_size):
             image = batch["image"].cuda(non_blocking=True)
             coords = batch["coords"]
             mask_batch = model(image)
@@ -156,10 +129,7 @@ def optimize_threshold(gt_images, pred_images):
     union = np.zeros(len(thresholds))
 
     with Pool(32) as wp:
-        for i, u in tqdm(
-            wp.imap_unordered(__compute_ious, zip(gt_images, pred_images)),
-            total=len(gt_images),
-        ):
+        for i, u in tqdm(wp.imap_unordered(__compute_ious, zip(gt_images, pred_images)), total=len(gt_images)):
             intersection += i
             union += u
 
@@ -178,10 +148,7 @@ def visualize_inria_predictions(
 ):
     images = []
     for image, target, image_id, logits in zip(
-        input[input_image_key],
-        input[input_mask_key],
-        input[input_image_id_key],
-        output[output_mask_key],
+        input[input_image_key], input[input_mask_key], input[input_image_id_key], output[output_mask_key]
     ):
         image = rgb_image_from_tensor(image, mean, std)
         target = to_numpy(target).squeeze(0)
@@ -194,18 +161,14 @@ def visualize_inria_predictions(
         overlay[true_mask & pred_mask] = np.array(
             [0, 250, 0], dtype=overlay.dtype
         )  # Correct predictions (Hits) painted with green
-        overlay[true_mask & ~pred_mask] = np.array(
-            [250, 0, 0], dtype=overlay.dtype
-        )  # Misses painted with red
+        overlay[true_mask & ~pred_mask] = np.array([250, 0, 0], dtype=overlay.dtype)  # Misses painted with red
         overlay[~true_mask & pred_mask] = np.array(
             [250, 250, 0], dtype=overlay.dtype
         )  # False alarm painted with yellow
 
         image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
         overlay = cv2.addWeighted(image, 0.5, overlay, 0.5, 0, dtype=cv2.CV_8U)
-        cv2.putText(
-            overlay, str(image_id), (10, 15), cv2.FONT_HERSHEY_PLAIN, 1, (250, 250, 250)
-        )
+        cv2.putText(overlay, str(image_id), (10, 15), cv2.FONT_HERSHEY_PLAIN, 1, (250, 250, 250))
 
         images.append(overlay)
     return images
