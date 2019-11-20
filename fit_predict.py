@@ -132,6 +132,7 @@ def main():
 
         if online_pseudolabeling:
             criterion_name = "soft_bce"
+            print("Using soft_bce loss since online pseudolabeling is On")
 
         criterion = get_loss(criterion_name)
         optimizer = get_optimizer(optimizer_name, model.parameters(), learning_rate)
@@ -152,17 +153,22 @@ def main():
 
         if online_pseudolabeling:
             unlabeled_train = get_pseudolabeling_dataset(data_dir, image_size=image_size, augmentation=augmentations)
-            unlabeled_eval = get_pseudolabeling_dataset(data_dir, image_size=image_size)
+            unlabeled_label = get_pseudolabeling_dataset(data_dir, image_size=image_size)
 
             train_ds = train_ds + unlabeled_train
 
-            loaders["label"] = DataLoader(unlabeled_eval, shuffle=False, batch_size=batch_size)
+            loaders["label"] = DataLoader(unlabeled_label,
+                                          batch_size=batch_size,
+                                          num_workers=num_workers,
+                                          pin_memory=True)
 
             callbacks += [
                 BCEOnlinePseudolabelingCallback2d(
                     unlabeled_train.targets, pseudolabel_loader="label", prob_threshold=0.9
                 )
             ]
+
+            print("Using online pseudolabeling with ", len(unlabeled_label), "samples")
 
         loaders["train"] = train_loader = DataLoader(
             train_ds,
@@ -175,7 +181,7 @@ def main():
         )
 
         loaders["valid"] = valid_loader = DataLoader(
-            valid_ds, batch_size=batch_size, num_workers=num_workers, pin_memory=True, shuffle=False
+            valid_ds, batch_size=batch_size, num_workers=num_workers, pin_memory=True
         )
 
         current_time = datetime.now().strftime("%b%d_%H_%M")

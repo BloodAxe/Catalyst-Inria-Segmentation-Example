@@ -1,6 +1,6 @@
 import math
 import os
-from typing import List, Callable
+from typing import List, Callable, Optional
 
 import albumentations as A
 import cv2
@@ -8,6 +8,7 @@ import numpy as np
 import pandas as pd
 from pytorch_toolbelt.inference.tiles import ImageSlicer
 from pytorch_toolbelt.utils import fs
+from pytorch_toolbelt.utils.catalyst import PseudolabelDatasetMixin
 from pytorch_toolbelt.utils.torch_utils import tensor_from_rgb_image, tensor_from_mask_image
 from scipy.ndimage import binary_dilation, binary_fill_holes
 from torch.utils.data import WeightedRandomSampler, Dataset, ConcatDataset
@@ -27,6 +28,7 @@ OUTPUT_MASK_32_KEY = "mask_32"
 
 OUTPUT_CLASS_KEY = "classes"
 
+UNLABELED_SAMPLE = 127
 
 # NOISY SAMPLES
 # chicago27
@@ -42,6 +44,12 @@ def read_inria_image(fname):
 def read_inria_mask(fname):
     mask = fs.read_image_as_is(fname)
     cv2.threshold(mask, thresh=0, maxval=1, type=cv2.THRESH_BINARY, dst=mask)
+    return mask
+
+
+def read_inria_mask_with_pseudolabel(fname):
+    mask = fs.read_image_as_is(fname)
+    mask[mask > UNLABELED_SAMPLE] = 0
     return mask
 
 
@@ -67,38 +75,35 @@ def compute_boundary_mask(mask: np.ndarray) -> np.ndarray:
     return diff.astype(np.uint8)
 
 
-class InriaImageMaskDataset(Dataset):
+class InriaImageMaskDataset(Dataset, PseudolabelDatasetMixin):
     def __init__(
         self,
-        image_filenames,
-        target_filenames,
+        image_filenames:List[str],
+        target_filenames:Optional[List[str]],
+        transform:A.Compose,
         image_loader=read_inria_image,
         target_loader=read_inria_mask,
-        transform=None,
-        keep_in_mem=False,
         use_edges=False,
     ):
-        if len(image_filenames) != len(target_filenames):
+        if target_filenames is not None and len(image_filenames) != len(target_filenames):
             raise ValueError("Number of images does not corresponds to number of targets")
 
         self.image_ids = [fs.id_from_fname(fname) for fname in image_filenames]
         self.use_edges = use_edges
 
-        if keep_in_mem:
-            self.images = [image_loader(fname) for fname in image_filenames]
-            self.masks = [target_loader(fname) for fname in target_filenames]
-            self.get_image = lambda x: x
-            self.get_loader = lambda x: x
-        else:
-            self.images = image_filenames
-            self.masks = target_filenames
-            self.get_image = image_loader
-            self.get_loader = target_loader
+        self.images = image_filenames
+        self.masks = target_filenames
+        self.get_image = image_loader
+        self.get_loader = target_loader
 
         self.transform = transform
 
     def __len__(self):
         return len(self.images)
+
+    def set_target(self, index: int, value):
+        mask_fname = self.masks[index]
+        cv2.imwrite(mask_fname, value)
 
     def __getitem__(self, index):
         image = self.get_image(self.images[index])
@@ -300,7 +305,7 @@ def get_datasets(
         valid_mask = [os.path.join(data_dir, "train", "gt", f"{fname}.tif") for fname in valid_data]
 
         trainset = InriaImageMaskDataset(
-            train_img, train_mask, use_edges=use_edges, transform=train_transform, keep_in_mem=False
+            train_img, train_mask, use_edges=use_edges, transform=train_transform
         )
         num_train_samples = int(len(trainset) * (5000 * 5000) / (image_size[0] * image_size[1]))
         train_sampler = WeightedRandomSampler(np.array(train_data_weights), num_train_samples)
@@ -314,7 +319,6 @@ def get_datasets(
             tile_size=image_size,
             tile_step=image_size,
             target_shape=(5000, 5000),
-            keep_in_mem=False,
         )
 
     elif train_mode == "tiles":
@@ -327,11 +331,11 @@ def get_datasets(
         valid_mask = inria_tiles[inria_tiles["train"] == 0]["mask"]
 
         trainset = InriaImageMaskDataset(
-            train_img, train_mask, use_edges=use_edges, transform=train_transform, keep_in_mem=False
+            train_img, train_mask, use_edges=use_edges, transform=train_transform,
         )
 
         validset = InriaImageMaskDataset(
-            valid_img, valid_mask, use_edges=use_edges, transform=valid_transform, keep_in_mem=False
+            valid_img, valid_mask, use_edges=use_edges, transform=valid_transform,
         )
         train_sampler = None
     else:
@@ -344,5 +348,25 @@ def get_datasets(
     return trainset, validset, train_sampler
 
 
-def get_pseudolabeling_dataset(data_dir: str, image_size=(224, 224), augmentation="hard"):
-    return None
+def get_pseudolabeling_dataset(data_dir: str, image_size=(224, 224), augmentation=None):
+    images = fs.find_images_in_dir(os.path.join(data_dir, "test_tiles", "images"))
+
+    masks_dir = os.path.join(data_dir, "test_tiles", "masks")
+    os.makedirs(masks_dir, exist_ok=True)
+
+    masks = [os.path.join(masks_dir, fs.id_from_fname(image_fname) + ".png") for image_fname in images]
+
+    is_whole_image_input = True
+
+    if augmentation == "hard":
+        transfrom = hard_augmentations(image_size, is_whole_image_input)
+    elif augmentation == "medium":
+        transfrom = medium_augmentations(image_size, is_whole_image_input)
+    elif augmentation == "light":
+        transfrom = light_augmentations(image_size, is_whole_image_input)
+    else:
+        transfrom = A.Normalize()
+
+    return InriaImageMaskDataset(images, masks, transform=transfrom,
+                                 image_loader=read_inria_image,
+                                 target_loader=read_inria_mask_with_pseudolabel)
