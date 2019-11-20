@@ -350,7 +350,7 @@ def get_pseudolabeling_dataset(data_dir: str, include_masks: bool, image_size=(2
 
     masks = [os.path.join(masks_dir, fs.id_from_fname(image_fname) + ".png") for image_fname in images]
 
-    is_whole_image_input = True
+    is_whole_image_input = False
 
     if augmentation == "hard":
         transfrom = hard_augmentations(image_size, is_whole_image_input)
