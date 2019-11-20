@@ -96,6 +96,11 @@ def predict(
     if tta == "d4":
         model = TTAWrapper(model, d4_image2mask)
 
+    if torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model)
+
+    model = model.eval()
+
     with torch.no_grad():
         data = list(
             {"image": patch, "coords": np.array(coords, dtype=np.int)}

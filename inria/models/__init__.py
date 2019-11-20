@@ -14,6 +14,8 @@ def get_model(model_name: str, dropout=0.0) -> nn.Module:
         "effnetB4_fpncat128": fpn.effnetB4_fpncat128,
         "seresnext101_fpncat256": fpn.seresnext101_fpncat256,
 
+        "seresnext101_fpnsum256": fpn.seresnext101_fpnsum256,
+
         # UNet
         "seresnext101_unet64": unet.seresnext101_unet64
     }

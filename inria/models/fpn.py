@@ -21,6 +21,7 @@ __all__ = [
     "resnet152_fpncat256",
     "seresnext50_fpncat128",
     "seresnext101_fpncat256",
+    "seresnext101_fpnsum256",
     "effnetB4_fpncat128",
 ]
 
@@ -29,7 +30,7 @@ class FPNSumSegmentationModel(nn.Module):
     def __init__(
         self,
         encoder: EncoderModule,
-        mask_channels: int,
+        num_classes: int,
         dropout=0.25,
         abn_block=ABN,
         full_size_mask=True,
@@ -40,7 +41,7 @@ class FPNSumSegmentationModel(nn.Module):
 
         self.decoder = FPNSumDecoder(
             feature_maps=encoder.output_filters,
-            num_classes=mask_channels,
+            num_classes=num_classes,
             fpn_channels=fpn_channels,
             abn_block=abn_block,
             dropout=dropout,
@@ -137,6 +138,12 @@ def seresnext50_fpncat128(num_classes=1, dropout=0.0):
 def seresnext101_fpncat256(num_classes=1, dropout=0.0):
     encoder = E.SEResNeXt101Encoder()
     return FPNCatSegmentationModel(
+        encoder, num_classes=num_classes, fpn_channels=256, dropout=dropout
+    )
+
+def seresnext101_fpnsum256(num_classes=1, dropout=0.0):
+    encoder = E.SEResNeXt101Encoder()
+    return FPNSumSegmentationModel(
         encoder, num_classes=num_classes, fpn_channels=256, dropout=dropout
     )
 
