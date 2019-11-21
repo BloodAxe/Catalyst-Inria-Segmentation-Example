@@ -13,8 +13,9 @@ from pytorch_toolbelt.utils import fs
 from pytorch_toolbelt.utils.catalyst import ShowPolarBatchesCallback, PixelAccuracyCallback
 from pytorch_toolbelt.utils.random import set_manual_seed
 from pytorch_toolbelt.utils.torch_utils import count_parameters, transfer_weights
+from sklearn.utils import compute_sample_weight
 from torch import nn
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, WeightedRandomSampler
 from tqdm import tqdm
 
 from inria.dataset import (
@@ -161,12 +162,20 @@ def main():
                                                          image_size=image_size,
                                                          augmentation=augmentations)
 
-            train_ds = train_ds + unlabeled_train
-
             loaders["label"] = DataLoader(unlabeled_label,
                                           batch_size=batch_size,
                                           num_workers=num_workers,
                                           pin_memory=True)
+
+            if train_sampler is not None:
+                num_samples = 2 * train_sampler.num_samples
+            else:
+                num_samples = 2 * len(train_ds)
+
+            weights = compute_sample_weight("balanced", [0] * len(train_ds) + [1] * len(unlabeled_label))
+
+            train_sampler = WeightedRandomSampler(weights, num_samples, replacement=True)
+            train_ds = train_ds + unlabeled_train
 
             callbacks += [
                 BCEOnlinePseudolabelingCallback2d(

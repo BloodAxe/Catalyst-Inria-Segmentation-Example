@@ -53,7 +53,7 @@ def read_inria_mask(fname):
 
 def read_inria_mask_with_pseudolabel(fname):
     mask = fs.read_image_as_is(fname)
-    mask[mask > UNLABELED_SAMPLE] = 0
+    mask[mask > UNLABELED_SAMPLE] = 1
     return mask
 
 
@@ -105,10 +105,10 @@ class InriaImageMaskDataset(Dataset, PseudolabelDatasetMixin):
     def __len__(self):
         return len(self.images)
 
-    def set_target(self, index: int, value:np.ndarray):
+    def set_target(self, index: int, value: np.ndarray):
         mask_fname = self.masks[index]
 
-        value = value.copy()
+        value = value.astype(np.uint8)
         value[value == 1] = 255
         cv2.imwrite(mask_fname, value)
 

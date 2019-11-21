@@ -11,7 +11,7 @@ def get_loss(loss_name: str, **kwargs):
         return BCEWithLogitsLoss(**kwargs)
 
     if loss_name.lower() == "soft_bce":
-        return SoftBCELoss(smooth_factor=1e-5, ignore_index=UNLABELED_SAMPLE)
+        return SoftBCELoss(smooth_factor=0, ignore_index=UNLABELED_SAMPLE)
 
     if loss_name.lower() == "focal":
         return BinaryFocalLoss(alpha=None, gamma=1.5, **kwargs)
