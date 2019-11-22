@@ -79,8 +79,8 @@ def main():
     )
     args = parser.parse_args()
 
-    df = cut_dataset_in_patches(args.data_dir, tile_size=(512, 512), tile_step=(256, 256), image_margin=0)
-    df.to_csv("inria_tiles.csv")
+    df = cut_dataset_in_patches(args.data_dir, tile_size=(512, 512), tile_step=(384, 384), image_margin=0)
+    df.to_csv(os.path.join(args.data_dir, "inria_tiles.csv"))
 
 
 if __name__ == "__main__":

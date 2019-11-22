@@ -131,11 +131,14 @@ def main():
 
     if run_train:
 
+        ignore_index = None
+
         if online_pseudolabeling:
             criterion_name = "soft_bce"
+            ignore_index = UNLABELED_SAMPLE
             print("Using soft_bce loss since online pseudolabeling is On")
 
-        criterion = get_loss(criterion_name)
+        criterion = get_loss(criterion_name, ignore_index=ignore_index)
         optimizer = get_optimizer(optimizer_name, model.parameters(), learning_rate)
         callbacks = [
             CriterionCallback(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY),
@@ -181,7 +184,7 @@ def main():
                 BCEOnlinePseudolabelingCallback2d(
                     unlabeled_train,
                     pseudolabel_loader="label",
-                    prob_threshold=0.9,
+                    prob_threshold=0.75,
                     output_key=OUTPUT_MASK_KEY,
                     unlabeled_class=UNLABELED_SAMPLE
                 )
@@ -211,6 +214,9 @@ def main():
 
         if fast:
             checkpoint_prefix += "_fast"
+
+        if online_pseudolabeling:
+            checkpoint_prefix += "_opl"
 
         if experiment is not None:
             checkpoint_prefix = experiment

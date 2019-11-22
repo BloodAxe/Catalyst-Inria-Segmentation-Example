@@ -59,13 +59,13 @@ def main():
     model = get_model(args.model)
     unpack_checkpoint(checkpoint, model=model)
 
+    model = nn.Sequential(PickModelOutput(model, OUTPUT_MASK_KEY), nn.Sigmoid())
+
     if args.tta == "fliplr":
         model = TTAWrapper(model, fliplr_image2mask)
 
     if args.tta == "d4":
         model = TTAWrapper(model, d4_image2mask)
-
-    model = nn.Sequential(PickModelOutput(model, OUTPUT_MASK_KEY), nn.Sigmoid())
 
     model = model.cuda()
     if torch.cuda.device_count() > 1:
@@ -78,7 +78,7 @@ def main():
     name = os.path.join(run_dir, "sample_color.jpg")
     cv2.imwrite(name, mask)
 
-    os.makedirs(os.path.join(out_dir, "test_predictions"))
+    os.makedirs(os.path.join(out_dir, "test_predictions"), exist_ok=True)
     
     test_images = find_in_dir(os.path.join(data_dir, "test", "images"))
     for fname in tqdm(test_images, total=len(test_images)):
