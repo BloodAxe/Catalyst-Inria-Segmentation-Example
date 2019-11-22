@@ -331,7 +331,16 @@ def get_datasets(
 
         trainset = InriaImageMaskDataset(train_img, train_mask, use_edges=use_edges, transform=train_transform)
 
-        validset = InriaImageMaskDataset(valid_img, valid_mask, use_edges=use_edges, transform=valid_transform)
+        validset = InrialTiledImageMaskDataset(
+            valid_img,
+            valid_mask,
+            use_edges=use_edges,
+            transform=valid_transform,
+            # For validation we don't want tiles overlap
+            tile_size=image_size,
+            tile_step=image_size,
+            target_shape=(5000, 5000),
+        )
         train_sampler = None
     else:
         raise ValueError(train_mode)
