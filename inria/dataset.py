@@ -321,7 +321,7 @@ def get_datasets(
         )
 
     elif train_mode == "tiles":
-        inria_tiles = pd.read_csv("inria_tiles.csv")
+        inria_tiles = pd.read_csv(os.path.join(data_dir, "inria_tiles.csv"))
 
         train_img = inria_tiles[inria_tiles["train"] == 1]["image"]
         train_mask = inria_tiles[inria_tiles["train"] == 1]["mask"]
