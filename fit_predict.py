@@ -380,10 +380,11 @@ def main():
 
         # Training is finished. Let's run predictions using best checkpoint weights
         best_checkpoint = os.path.join(log_dir, "main", "checkpoints", "best.pth")
-        unpack_checkpoint(best_checkpoint, model=model)
 
         model_checkpoint = os.path.join(log_dir, "warmup", "checkpoints", f"{checkpoint_prefix}.pth")
         clean_checkpoint(best_checkpoint, model_checkpoint)
+
+        unpack_checkpoint(torch.load(model_checkpoint), model=model)
 
         mask = predict(
             model,

@@ -8,7 +8,7 @@ from torch.nn import functional as F
 
 from ..dataset import OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY, OUTPUT_MASK_32_KEY, OUTPUT_MASK_KEY
 
-__all__ = ["resnet34_unet32", "resnet34_unet32v2", "seresnext101_unet64"]
+__all__ = ["resnet34_unet32", "resnet34_unet32v2", "seresnext101_unet64", "seresnext50_unet64"]
 
 
 class UnetSegmentationModel(nn.Module):
@@ -95,6 +95,11 @@ def resnet34_unet32(num_classes=1, dropout=0.0):
 def resnet34_unet32v2(num_classes=1, dropout=0.0):
     encoder = E.Resnet34Encoder()
     return UnetV2SegmentationModel(encoder, num_classes=num_classes, unet_channels=32, dropout=dropout)
+
+
+def seresnext50_unet64(num_classes=1, dropout=0.0):
+    encoder = E.SEResNeXt50Encoder()
+    return UnetSegmentationModel(encoder, num_classes=num_classes, unet_channels=64, dropout=dropout)
 
 
 def seresnext101_unet64(num_classes=1, dropout=0.0):

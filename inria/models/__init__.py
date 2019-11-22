@@ -20,6 +20,7 @@ def get_model(model_name: str, dropout=0.0) -> nn.Module:
         # UNet
         "resnet34_unet32": unet.resnet34_unet32,
         "resnet34_unet32v2": unet.resnet34_unet32v2,
+        "seresnext50_unet64": unet.seresnext50_unet64,
         "seresnext101_unet64": unet.seresnext101_unet64,
 
         # Deeplab
