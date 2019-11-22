@@ -3,6 +3,7 @@ from pytorch_toolbelt.utils.catalyst import PseudolabelDatasetMixin
 from pytorch_toolbelt.utils.torch_utils import to_numpy
 import numpy as np
 
+
 class BCEOnlinePseudolabelingCallback2d(Callback):
     """
     Online pseudo-labeling callback for multi-class problem.
@@ -37,6 +38,7 @@ class BCEOnlinePseudolabelingCallback2d(Callback):
         output_key="logits",
         unlabeled_class=-100,
         label_smoothing=0.0,
+        label_frequency=1,
     ):
         assert 1.0 > prob_threshold > 0.5
 
@@ -48,6 +50,8 @@ class BCEOnlinePseudolabelingCallback2d(Callback):
         self.output_key = output_key
         self.unlabeled_class = unlabeled_class
         self.label_smoothing = label_smoothing
+        self.last_labeled_epoch = None
+        self.label_frequency = label_frequency
 
     # def on_epoch_start(self, state: RunnerState):
     #     pass
@@ -55,6 +59,11 @@ class BCEOnlinePseudolabelingCallback2d(Callback):
     # def on_loader_start(self, state: RunnerState):
     #     if state.loader_name == self.pseudolabel_loader:
     #         self.predictions = []
+
+    def on_epoch_start(self, state: RunnerState):
+        self.should_relabel = (
+            self.last_labeled_epoch is None or (state.epoch - self.last_labeled_epoch) % self.label_frequency == 0
+        )
 
     def get_probabilities(self, state: RunnerState):
         probs = state.output[self.output_key].detach().sigmoid()
@@ -64,6 +73,9 @@ class BCEOnlinePseudolabelingCallback2d(Callback):
 
     def on_batch_end(self, state: RunnerState):
         if state.loader_name != self.pseudolabel_loader:
+            return
+
+        if not self.should_relabel:
             return
 
         # Get predictions for batch
@@ -81,33 +93,3 @@ class BCEOnlinePseudolabelingCallback2d(Callback):
             p = np.moveaxis(p, 0, -1)
 
             self.unlabeled_ds.set_target(sample_index, p)
-
-    # def on_loader_end(self, state: RunnerState):
-    # if state.loader_name != self.pseudolabel_loader:
-    #     return
-
-    # predictions = np.array(self.predictions)
-    # max_pred = np.argmax(predictions, axis=1)
-    # max_score = np.amax(predictions, axis=1)
-    # confident_mask = max_score > self.prob_threshold
-    # num_samples = len(predictions)
-    #
-    # for index, predicted_target, score in zip(range(num_samples, max_pred, max_score)):
-    #     target = predicted_target if score > self.prob_threshold else self.unlabeled_class
-    #     self.unlabeled_ds.set_target(index, target)
-    #
-    # num_confident_samples = confident_mask.sum()
-    # state.metrics.epoch_values[state.loader_name]["pseudolabeling/confident_samples"] = num_confident_samples
-    # state.metrics.epoch_values[state.loader_name]["pseudolabeling/confident_samples_mean_score"] = max_score[
-    #     confident_mask
-    # ].mean()
-    #
-    # state.metrics.epoch_values[state.loader_name]["pseudolabeling/unconfident_samples"] = (
-    #     len(predictions) - num_confident_samples
-    # )
-    # state.metrics.epoch_values[state.loader_name]["pseudolabeling/unconfident_samples_mean_score"] = max_score[
-    #     ~confident_mask
-    # ].mean()
-
-    # def on_epoch_end(self, state: RunnerState):
-    #     pass

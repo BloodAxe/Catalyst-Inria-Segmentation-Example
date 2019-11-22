@@ -7,7 +7,7 @@ from .dataset import UNLABELED_SAMPLE
 
 def get_loss(loss_name: str, ignore_index=None):
     if loss_name.lower() == "bce":
-        return SoftBCELoss(smooth_factor=0, ignore_index=ignore_index)
+        return BCELoss(ignore_index=ignore_index)
 
     if loss_name.lower() == "soft_bce":
         return SoftBCELoss(smooth_factor=0.1, ignore_index=ignore_index)
