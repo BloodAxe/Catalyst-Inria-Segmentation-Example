@@ -1,6 +1,6 @@
 from torch import nn
 
-from . import fpn, unet
+from . import fpn, unet, deeplab
 
 __all__ = ["get_model"]
 
@@ -21,6 +21,9 @@ def get_model(model_name: str, dropout=0.0) -> nn.Module:
         "resnet34_unet32": unet.resnet34_unet32,
         "resnet34_unet32v2": unet.resnet34_unet32v2,
         "seresnext101_unet64": unet.seresnext101_unet64,
+
+        # Deeplab
+        "resnet34_deeplab128": deeplab.resnet34_deeplab128
     }
 
     return registry[model_name.lower()](dropout=dropout)
