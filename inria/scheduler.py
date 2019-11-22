@@ -1,5 +1,5 @@
 import torch
-from torch.optim.lr_scheduler import OneCycleLR, ExponentialLR, CyclicLR, MultiStepLR
+from torch.optim.lr_scheduler import OneCycleLR, ExponentialLR, CyclicLR, MultiStepLR, CosineAnnealingLR, CosineAnnealingWarmRestarts
 
 
 def get_scheduler(scheduler_name: str, optimizer, lr, num_epochs, batches_in_epoch=None):
@@ -7,7 +7,12 @@ def get_scheduler(scheduler_name: str, optimizer, lr, num_epochs, batches_in_epo
         return None
 
     if scheduler_name.lower() == "cos":
-        return torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, num_epochs, eta_min=1e-6)
+        return CosineAnnealingLR(optimizer, num_epochs, eta_min=1e-6)
+
+    if scheduler_name.lower() == "cosr":
+        return CosineAnnealingWarmRestarts(optimizer,
+                                           T_0=max(2, num_epochs // 4),
+                                           eta_min=1e-6)
 
     if scheduler_name.lower() in {"1cycle", "one_cycle"}:
         return OneCycleLR(
