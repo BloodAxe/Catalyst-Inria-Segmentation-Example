@@ -2,19 +2,30 @@ from __future__ import absolute_import
 
 import argparse
 import collections
+import gc
 import os
 from datetime import datetime
 
 import cv2
 import numpy as np
-from catalyst.dl import SupervisedRunner, EarlyStoppingCallback, CriterionCallback
+import torch
+from catalyst.dl import (
+    SupervisedRunner,
+    EarlyStoppingCallback,
+    CriterionCallback,
+    OptimizerCallback,
+    SchedulerCallback,
+)
+from catalyst.dl.callbacks import CriterionAggregatorCallback
 from catalyst.utils import load_checkpoint, unpack_checkpoint
+from pytorch_toolbelt.optimization.functional import get_lr_decay_parameters
 from pytorch_toolbelt.utils import fs
 from pytorch_toolbelt.utils.catalyst import ShowPolarBatchesCallback, PixelAccuracyCallback
 from pytorch_toolbelt.utils.random import set_manual_seed
-from pytorch_toolbelt.utils.torch_utils import count_parameters, transfer_weights
+from pytorch_toolbelt.utils.torch_utils import count_parameters, transfer_weights, get_optimizable_parameters
 from sklearn.utils import compute_sample_weight
 from torch import nn
+from torch.optim.lr_scheduler import CyclicLR
 from torch.utils.data import DataLoader, WeightedRandomSampler
 from tqdm import tqdm
 
@@ -25,20 +36,28 @@ from inria.dataset import (
     INPUT_MASK_KEY,
     get_pseudolabeling_dataset,
     get_datasets,
-    UNLABELED_SAMPLE)
+    UNLABELED_SAMPLE,
+    OUTPUT_MASK_8_KEY,
+    OUTPUT_MASK_4_KEY,
+    OUTPUT_MASK_16_KEY,
+    OUTPUT_MASK_32_KEY,
+)
 
 from inria.factory import visualize_inria_predictions, predict
-from inria.losses import get_loss
+from inria.losses import get_loss, AdaptiveMaskLoss2d
 from inria.metric import JaccardMetricPerImage
 from inria.models import get_model
 from inria.optim import get_optimizer
 from inria.pseudo import BCEOnlinePseudolabelingCallback2d
 from inria.scheduler import get_scheduler
+from inria.utils import clean_checkpoint, report_checkpoint
 
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument("-acc", "--accumulation-steps", type=int, default=1, help="Number of batches to process")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
+    parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument("--fast", action="store_true")
     parser.add_argument(
         "-dd", "--data-dir", type=str, required=True, help="Data directory for INRIA sattelite dataset"
@@ -50,14 +69,13 @@ def main():
     # parser.add_argument('-fe', '--freeze-encoder', type=int, default=0, help='Freeze encoder parameters for N epochs')
     # parser.add_argument('-ft', '--fine-tune', action='store_true')
     parser.add_argument("-lr", "--learning-rate", type=float, default=1e-3, help="Initial learning rate")
-    parser.add_argument("-l", "--criterion", type=str, default="bce", help="Criterion")
-    parser.add_argument("-o", "--optimizer", default="Adam", help="Name of the optimizer")
+    parser.add_argument("-l", "--criterion", type=str, required=True, action="append", nargs="+", help="Criterion")
+    parser.add_argument("-o", "--optimizer", default="RAdam", help="Name of the optimizer")
     parser.add_argument(
         "-c", "--checkpoint", type=str, default=None, help="Checkpoint filename to use as initial model weights"
     )
     parser.add_argument("-w", "--workers", default=8, type=int, help="Num workers")
     parser.add_argument("-a", "--augmentations", default="hard", type=str, help="")
-    parser.add_argument("-tta", "--tta", default=None, type=str, help="Type of TTA to use [fliplr, d4]")
     parser.add_argument("-tm", "--train-mode", default="random", type=str, help="")
     parser.add_argument("--run-mode", default="fit_predict", type=str, help="")
     parser.add_argument("--transfer", default=None, type=str, help="")
@@ -67,6 +85,14 @@ def main():
     parser.add_argument("-x", "--experiment", default=None, type=str, help="")
     parser.add_argument("-d", "--dropout", default=0.0, type=float, help="Dropout before head layer")
     parser.add_argument("--opl", action="store_true")
+    parser.add_argument(
+        "--warmup", default=0, type=int, help="Number of warmup epochs with reduced LR on encoder parameters"
+    )
+    parser.add_argument(
+        "-wd", "--weight-decay", default=0, type=float, help="L2 weight decay"
+    )
+    parser.add_argument("--show", action="store_true")
+    parser.add_argument("--dsv", action="store_true")
 
     args = parser.parse_args()
     set_manual_seed(args.seed)
@@ -82,17 +108,20 @@ def main():
     fast = args.fast
     augmentations = args.augmentations
     train_mode = args.train_mode
-    run_mode = args.run_mode
-    log_dir = None
     fp16 = args.fp16
     scheduler_name = args.scheduler
     experiment = args.experiment
     dropout = args.dropout
     online_pseudolabeling = args.opl
-    criterion_name = args.criterion
+    criterions = args.criterion
+    verbose = args.verbose
+    warmup = args.warmup
+    show = args.show
+    use_dsv = args.dsv
+    accumulation_steps = args.accumulation_steps
+    weight_decay = args.weight_decay
 
-    run_train = run_mode == "fit_predict" or run_mode == "fit"
-    run_predict = run_mode == "fit_predict" or run_mode == "predict"
+    run_train = num_epochs > 0
 
     model: nn.Module = get_model(model_name, dropout=dropout).cuda()
 
@@ -104,69 +133,132 @@ def main():
 
         transfer_weights(model, pretrained_dict)
 
-    checkpoint = None
     if args.checkpoint:
         checkpoint = load_checkpoint(fs.auto_file(args.checkpoint))
         unpack_checkpoint(checkpoint, model=model)
 
-        checkpoint_epoch = checkpoint["epoch"]
         print("Loaded model weights from:", args.checkpoint)
-        print("Epoch                    :", checkpoint_epoch)
-        print(
-            "Metrics (Train):",
-            "IoU:",
-            checkpoint["epoch_metrics"]["train"]["jaccard"],
-            "Acc:",
-            checkpoint["epoch_metrics"]["train"]["accuracy"],
-        )
-        print(
-            "Metrics (Valid):",
-            "IoU:",
-            checkpoint["epoch_metrics"]["valid"]["jaccard"],
-            "Acc:",
-            checkpoint["epoch_metrics"]["valid"]["accuracy"],
-        )
+        report_checkpoint(checkpoint)
 
-        log_dir = os.path.dirname(os.path.dirname(fs.auto_file(args.checkpoint)))
+    runner = SupervisedRunner(input_key=INPUT_IMAGE_KEY, output_key=None)
+    main_metric = "jaccard"
+    cmd_args = vars(args)
 
-    if run_train:
+    current_time = datetime.now().strftime("%b%d_%H_%M")
+    checkpoint_prefix = f"{current_time}_{args.model}"
 
+    if fp16:
+        checkpoint_prefix += "_fp16"
+
+    if fast:
+        checkpoint_prefix += "_fast"
+
+    if online_pseudolabeling:
+        checkpoint_prefix += "_opl"
+
+    if experiment is not None:
+        checkpoint_prefix = experiment
+
+    log_dir = os.path.join("runs", checkpoint_prefix)
+    os.makedirs(log_dir, exist_ok=False)
+
+    default_callbacks = [
+        PixelAccuracyCallback(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY),
+        JaccardMetricPerImage(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY),
+    ]
+
+    if show:
+        default_callbacks += [ShowPolarBatchesCallback(visualize_inria_predictions, metric="accuracy", minimize=False)]
+
+    train_ds, valid_ds, train_sampler = get_datasets(
+        data_dir=data_dir, image_size=image_size, augmentation=augmentations, train_mode=train_mode, fast=fast
+    )
+
+    # Pretrain/warmup
+    if warmup:
+        callbacks = default_callbacks.copy()
+        criterions_dict = {}
+        losses = []
         ignore_index = None
 
-        if online_pseudolabeling:
-            ignore_index = UNLABELED_SAMPLE
+        for loss_name, loss_weight in criterions:
+            criterion_callback = CriterionCallback(
+                prefix="seg_loss/" + loss_name,
+                input_key=INPUT_MASK_KEY,
+                output_key=OUTPUT_MASK_KEY,
+                criterion_key=loss_name,
+                multiplier=float(loss_weight),
+            )
 
-        criterion = get_loss(criterion_name, ignore_index=ignore_index)
-        optimizer = get_optimizer(optimizer_name, model.parameters(), learning_rate)
-        callbacks = [
-            CriterionCallback(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY),
-            PixelAccuracyCallback(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY),
-            JaccardMetricPerImage(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY),
-            # OptimalThreshold(),
-            ShowPolarBatchesCallback(visualize_inria_predictions, metric="accuracy", minimize=False),
-            EarlyStoppingCallback(30, metric="jaccard", minimize=False),
+            criterions_dict[loss_name] = get_loss(loss_name, ignore_index=ignore_index)
+            callbacks.append(criterion_callback)
+            losses.append(criterion_callback.prefix)
+            print("Using loss", loss_name, loss_weight)
+
+        callbacks += [
+            CriterionAggregatorCallback(prefix="loss", loss_keys=losses),
+            OptimizerCallback(accumulation_steps=accumulation_steps, decouple_weight_decay=True),
         ]
 
-        train_ds, valid_ds, train_sampler = get_datasets(
-            data_dir=data_dir, image_size=image_size, augmentation=augmentations, train_mode=train_mode, fast=fast
-        )
+        parameters = get_lr_decay_parameters(model.named_parameters(), learning_rate, {"encoder": 0.1})
+        optimizer = get_optimizer("RAdam", parameters, learning_rate=learning_rate * 0.1)
 
         loaders = collections.OrderedDict()
+        loaders["train"] = DataLoader(
+            train_ds,
+            batch_size=batch_size,
+            num_workers=num_workers,
+            pin_memory=True,
+            drop_last=True,
+            shuffle=train_sampler is None,
+            sampler=train_sampler,
+        )
 
+        loaders["valid"] = DataLoader(valid_ds, batch_size=batch_size, num_workers=num_workers, pin_memory=True)
+
+        runner.train(
+            fp16=fp16,
+            model=model,
+            criterion=criterions_dict,
+            optimizer=optimizer,
+            scheduler=None,
+            callbacks=callbacks,
+            loaders=loaders,
+            logdir=os.path.join(log_dir, "warmup"),
+            num_epochs=warmup,
+            verbose=verbose,
+            main_metric=main_metric,
+            minimize_metric=False,
+            checkpoint_data={"cmd_args": cmd_args},
+        )
+
+        del optimizer, loaders
+
+        best_checkpoint = os.path.join(log_dir, "warmup", "checkpoints", "best.pth")
+        model_checkpoint = os.path.join(log_dir, "warmup", "checkpoints", f"{checkpoint_prefix}_warmup.pth")
+        clean_checkpoint(best_checkpoint, model_checkpoint)
+
+        torch.cuda.empty_cache()
+        gc.collect()
+
+    if run_train:
+        loaders = collections.OrderedDict()
+        callbacks = default_callbacks.copy()
+        criterions_dict = {}
+        losses = []
+
+        ignore_index = None
         if online_pseudolabeling:
-            unlabeled_label = get_pseudolabeling_dataset(data_dir,
-                                                         include_masks=False,
-                                                         image_size=image_size)
+            ignore_index = UNLABELED_SAMPLE
+            unlabeled_label = get_pseudolabeling_dataset(data_dir, include_masks=False, image_size=image_size)
 
-            unlabeled_train = get_pseudolabeling_dataset(data_dir,
-                                                         include_masks=True,
-                                                         image_size=image_size,
-                                                         augmentation=augmentations)
+            unlabeled_train = get_pseudolabeling_dataset(
+                data_dir, include_masks=True, image_size=image_size, augmentation=augmentations
+            )
 
-            loaders["label"] = DataLoader(unlabeled_label,
-                                          batch_size=batch_size,
-                                          num_workers=num_workers,
-                                          pin_memory=True)
+            loaders["label"] = DataLoader(
+                unlabeled_label, batch_size=batch_size, num_workers=num_workers, pin_memory=True
+            )
 
             if train_sampler is not None:
                 num_samples = 2 * train_sampler.num_samples
@@ -191,7 +283,7 @@ def main():
 
             print("Using online pseudolabeling with ", len(unlabeled_label), "samples")
 
-        loaders["train"] = train_loader = DataLoader(
+        loaders["train"] = DataLoader(
             train_ds,
             batch_size=batch_size,
             num_workers=num_workers,
@@ -201,34 +293,54 @@ def main():
             sampler=train_sampler,
         )
 
-        loaders["valid"] = valid_loader = DataLoader(
-            valid_ds, batch_size=batch_size, num_workers=num_workers, pin_memory=True
-        )
+        loaders["valid"] = DataLoader(valid_ds, batch_size=batch_size, num_workers=num_workers, pin_memory=True)
 
-        current_time = datetime.now().strftime("%b%d_%H_%M")
-        checkpoint_prefix = f"{current_time}_{args.model}_{criterion_name}"
+        # Create losses
+        for loss_name, loss_weight in criterions:
+            criterion_callback = CriterionCallback(
+                prefix="seg_loss/" + loss_name,
+                input_key=INPUT_MASK_KEY,
+                output_key=OUTPUT_MASK_KEY,
+                criterion_key=loss_name,
+                multiplier=float(loss_weight),
+            )
 
-        if fp16:
-            checkpoint_prefix += "_fp16"
+            criterions_dict[loss_name] = get_loss(loss_name, ignore_index=ignore_index)
+            callbacks.append(criterion_callback)
+            losses.append(criterion_callback.prefix)
+            print("Using loss", loss_name, loss_weight)
 
-        if fast:
-            checkpoint_prefix += "_fast"
+        if use_dsv:
+            print("Using DSV")
+            criterions = "dsv"
+            dsv_loss_name = "soft_bce"
 
-        if online_pseudolabeling:
-            checkpoint_prefix += "_opl"
+            criterions_dict[criterions] = AdaptiveMaskLoss2d(get_loss(dsv_loss_name, ignore_index=ignore_index))
 
-        if experiment is not None:
-            checkpoint_prefix = experiment
+            for i, dsv_input in enumerate(
+                [OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY, OUTPUT_MASK_32_KEY]
+            ):
+                criterion_callback = CriterionCallback(
+                    prefix="seg_loss_dsv/" + dsv_input,
+                    input_key=OUTPUT_MASK_KEY,
+                    output_key=dsv_input,
+                    criterion_key=criterions,
+                    multiplier=1.0,
+                )
+                callbacks.append(criterion_callback)
+                losses.append(criterion_callback.prefix)
 
-        log_dir = os.path.join("runs", checkpoint_prefix)
-        os.makedirs(log_dir, exist_ok=False)
+        callbacks += [
+            CriterionAggregatorCallback(prefix="loss", loss_keys=losses),
+            OptimizerCallback(accumulation_steps=accumulation_steps, decouple_weight_decay=True),
+        ]
 
+        optimizer = get_optimizer(optimizer_name, get_optimizable_parameters(model), learning_rate, weight_decay=weight_decay)
         scheduler = get_scheduler(
-            scheduler_name, optimizer, lr=learning_rate, num_epochs=num_epochs, batches_in_epoch=len(train_loader)
+            scheduler_name, optimizer, lr=learning_rate, num_epochs=num_epochs, batches_in_epoch=len(loaders["train"])
         )
-
-        # model runner
-        runner = SupervisedRunner(input_key=INPUT_IMAGE_KEY, output_key=None)
+        if isinstance(scheduler, CyclicLR):
+            callbacks += [SchedulerCallback(mode="batch")]
 
         print("Train session    :", checkpoint_prefix)
         print("\tFP16 mode      :", fp16)
@@ -239,36 +351,39 @@ def main():
         print("\tData dir       :", data_dir)
         print("\tLog dir        :", log_dir)
         print("\tAugmentations  :", augmentations)
-        print("\tTrain size     :", len(train_loader), len(train_ds))
-        print("\tValid size     :", len(valid_loader), len(valid_ds))
+        print("\tTrain size     :", len(loaders["train"]), len(train_ds))
+        print("\tValid size     :", len(loaders["valid"]), len(valid_ds))
         print("Model            :", model_name)
         print("\tParameters     :", count_parameters(model))
         print("\tImage size     :", image_size)
         print("Optimizer        :", optimizer_name)
         print("\tLearning rate  :", learning_rate)
         print("\tBatch size     :", batch_size)
-        print("\tCriterion      :", criterion_name)
+        print("\tCriterion      :", criterions)
 
         # model training
         runner.train(
             fp16=fp16,
             model=model,
-            criterion=criterion,
+            criterion=criterions_dict,
             optimizer=optimizer,
             scheduler=scheduler,
             callbacks=callbacks,
             loaders=loaders,
-            logdir=log_dir,
+            logdir=os.path.join(log_dir, "main"),
             num_epochs=num_epochs,
-            verbose=True,
-            main_metric="jaccard",
+            verbose=verbose,
+            main_metric=main_metric,
             minimize_metric=False,
             state_kwargs={"cmd_args": vars(args)},
         )
 
         # Training is finished. Let's run predictions using best checkpoint weights
-        best_checkpoint = load_checkpoint(fs.auto_file("best.pth", where=log_dir))
+        best_checkpoint = os.path.join(log_dir, "main", "checkpoints", "best.pth")
         unpack_checkpoint(best_checkpoint, model=model)
+
+        model_checkpoint = os.path.join(log_dir, "warmup", "checkpoints", f"{checkpoint_prefix}.pth")
+        clean_checkpoint(best_checkpoint, model_checkpoint)
 
         mask = predict(
             model,
@@ -284,39 +399,6 @@ def main():
         cv2.imwrite(name, mask)
 
         del optimizer, loaders
-
-    if run_predict and not fast:
-
-        mask = predict(
-            model,
-            read_inria_image("sample_color.jpg"),
-            tta=args.tta,
-            image_size=image_size,
-            target_key=OUTPUT_MASK_KEY,
-            batch_size=args.batch_size,
-            activation="sigmoid",
-        )
-        mask = ((mask > 0.5) * 255).astype(np.uint8)
-        name = os.path.join(log_dir, "sample_color.jpg")
-        cv2.imwrite(name, mask)
-
-        out_dir = os.path.join(log_dir, "submit")
-        os.makedirs(out_dir, exist_ok=True)
-
-        test_images = fs.find_in_dir(os.path.join(data_dir, "test", "images"))
-        for fname in tqdm(test_images, total=len(test_images)):
-            image = read_inria_image(fname)
-            mask = predict(
-                model,
-                image,
-                tta=args.tta,
-                image_size=image_size,
-                batch_size=args.batch_size,
-                target_key=OUTPUT_MASK_KEY,
-            )
-            mask = ((mask > 0.5) * 255).astype(np.uint8)
-            name = os.path.join(out_dir, os.path.basename(fname))
-            cv2.imwrite(name, mask)
 
 
 if __name__ == "__main__":

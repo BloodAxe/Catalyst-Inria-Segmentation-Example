@@ -35,6 +35,7 @@ UNLABELED_SAMPLE = 127
 # chicago27
 # vienna30
 # austin23
+# chicago26
 
 TRAIN_LOCATIONS = ["austin", "chicago", "kitsap", "tyrol-w", "vienna"]
 TEST_LOCATIONS = ["bellingham", "bloomington", "innsbruck", "sfo", "tyrol-e"]
