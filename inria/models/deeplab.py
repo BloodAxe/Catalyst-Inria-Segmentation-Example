@@ -30,7 +30,7 @@ class DeeplabV3SegmentationModel(nn.Module):
 
         self.decoder = DeeplabV3Decoder(
             feature_maps=encoder.output_filters,
-            output_stride=encoder.output_stides[-1],
+            output_stride=encoder.output_strides[-1],
             num_classes=num_classes,
             high_level_bottleneck=high_level_bottleneck,
             low_level_bottleneck=low_level_bottleneck,
