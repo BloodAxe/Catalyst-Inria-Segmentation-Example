@@ -323,24 +323,21 @@ def get_datasets(
     elif train_mode == "tiles":
         inria_tiles = pd.read_csv(os.path.join(data_dir, "inria_tiles.csv"))
 
-        train_img = inria_tiles[inria_tiles["train"] == 1]["image"]
-        train_mask = inria_tiles[inria_tiles["train"] == 1]["mask"]
+        train_img = inria_tiles[inria_tiles["train"] == 1]["image"].tolist()
+        train_mask = inria_tiles[inria_tiles["train"] == 1]["mask"].tolist()
 
-        valid_img = inria_tiles[inria_tiles["train"] == 0]["image"]
-        valid_mask = inria_tiles[inria_tiles["train"] == 0]["mask"]
+        valid_img = inria_tiles[inria_tiles["train"] == 0]["image"].tolist()
+        valid_mask = inria_tiles[inria_tiles["train"] == 0]["mask"].tolist()
+
+        if fast:
+            train_img = train_img[:128]
+            train_mask = train_mask[:128]
+
+            valid_img = valid_img[:128]
+            valid_mask = valid_mask[:128]
 
         trainset = InriaImageMaskDataset(train_img, train_mask, use_edges=use_edges, transform=train_transform)
-
-        validset = InrialTiledImageMaskDataset(
-            valid_img,
-            valid_mask,
-            use_edges=use_edges,
-            transform=valid_transform,
-            # For validation we don't want tiles overlap
-            tile_size=image_size,
-            tile_step=image_size,
-            target_shape=(5000, 5000),
-        )
+        validset = InriaImageMaskDataset(valid_img, valid_mask, use_edges=use_edges, transform=valid_transform)
         train_sampler = None
     else:
         raise ValueError(train_mode)
