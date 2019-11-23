@@ -3,7 +3,8 @@ import math
 import albumentations as A
 import cv2
 
-__all__ = ["light_augmentations", "medium_augmentations", "hard_augmentations"]
+__all__ = ["safe_augmentations",
+           "light_augmentations", "medium_augmentations", "hard_augmentations"]
 
 
 def padding_for_rotation(image_size, rotation):
@@ -16,6 +17,50 @@ def padding_for_rotation(image_size, rotation):
 
     print("Image padding for rotation", rotation, pad_w, pad_h, r)
     return pad_h, pad_w
+
+
+def safe_augmentations(image_size, whole_image_input=True, rot_angle=5):
+    if whole_image_input:
+
+        pad_h, pad_w = padding_for_rotation(image_size, rot_angle)
+        crop_height = int(image_size[0] + pad_h * 2)
+        crop_width = int(image_size[1] + pad_w * 2)
+
+        spatial_transform = A.Compose(
+            [
+                # Make random-sized crop with scale [75%..125%] of target size 1.5 larger than target crop to have some space around for
+                # further transforms
+                A.RandomSizedCrop((int(crop_height * 0.75), int(crop_height * 1.25)), crop_height, crop_width),
+                # Apply random rotations
+                A.ShiftScaleRotate(
+                    shift_limit=0, scale_limit=0, rotate_limit=rot_angle, border_mode=cv2.BORDER_CONSTANT
+                ),
+                # Crop to desired image size
+                A.CenterCrop(image_size[0], image_size[1]),
+            ]
+        )
+    else:
+        spatial_transform = A.Compose(
+            [A.ShiftScaleRotate(scale_limit=0.15, rotate_limit=15, border_mode=cv2.BORDER_CONSTANT)]
+        )
+
+    return A.Compose(
+        [
+            spatial_transform,
+            A.HorizontalFlip(),
+            A.MaskDropout(5),
+            A.OneOf([A.RandomBrightnessContrast(),
+                     A.CLAHE(),
+                     A.HueSaturationValue(),
+                     A.RGBShift(),
+                     A.ChannelDropout(),
+                     A.ChannelShuffle(),
+                     A.RandomGamma(),
+                     A.NoOp()
+                     ]),
+            A.Normalize(),
+        ]
+    )
 
 
 def light_augmentations(image_size, whole_image_input=True, rot_angle=5):

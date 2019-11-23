@@ -265,6 +265,8 @@ def get_datasets(
         train_transform = medium_augmentations(image_size, is_whole_image_input)
     elif augmentation == "light":
         train_transform = light_augmentations(image_size, is_whole_image_input)
+    elif augmentation == "safe":
+        train_transform = safe_augmentations(image_size, is_whole_image_input)
     else:
         assert not is_whole_image_input
         train_transform = A.Normalize()
