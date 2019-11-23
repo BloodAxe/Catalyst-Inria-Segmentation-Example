@@ -19,6 +19,7 @@ def get_model(model_name: str, dropout=0.0) -> nn.Module:
 
         # RFPN family
         "resnet34_rfpncat128": fpn.resnet34_rfpncat128,
+        "seresnext101_rfpncat256": fpn.seresnext101_rfpncat256,
 
         # UNet
         "resnet34_unet32": unet.resnet34_unet32,

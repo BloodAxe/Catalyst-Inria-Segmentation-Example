@@ -111,6 +111,7 @@ class FPNCatSegmentationModel(nn.Module):
 
         return output
 
+
 class FPNCatSegmentationModel(nn.Module):
     def __init__(
         self,
@@ -155,10 +156,12 @@ class FPNCatSegmentationModel(nn.Module):
 
         return output
 
+
 class RFPNCatSegmentationModel(nn.Module):
     """
     Segmentation model with recurrent FPN decoder
     """
+
     def __init__(
         self,
         encoder: EncoderModule,
@@ -185,15 +188,17 @@ class RFPNCatSegmentationModel(nn.Module):
         input, pad = pad_image_tensor(input, 32)
         enc_features = self.encoder(input)
 
-        mask = torch.zeros((enc_features[0].size(0),
-                            self.num_classes,
-                            enc_features[0].size(2),
-                            enc_features[0].size(3)), device=enc_features[0].device)
+        mask = torch.zeros(
+            (enc_features[0].size(0), self.num_classes, enc_features[0].size(2), enc_features[0].size(3)),
+            device=enc_features[0].device,
+        )
 
         for i in range(3):
             # Concatenate intermediate mask with encoder feature maps
-            x = [torch.cat([f, F.interpolate(mask, size=f.size()[2:], mode="bilinear", align_corners=False)], dim=1)
-                 for f in enc_features]
+            x = [
+                torch.cat([f, F.interpolate(mask, size=f.size()[2:], mode="bilinear", align_corners=False)], dim=1)
+                for f in enc_features
+            ]
             mask, dsv = self.decoder(x)
 
         if self.full_size_mask:
@@ -230,11 +235,15 @@ def seresnext101_fpncat256(num_classes=1, dropout=0.0):
     encoder = E.SEResNeXt101Encoder()
     return FPNCatSegmentationModel(encoder, num_classes=num_classes, fpn_channels=256, dropout=dropout)
 
+
+def seresnext101_rfpncat256(num_classes=1, dropout=0.0):
+    encoder = E.SEResNeXt101Encoder()
+    return RFPNCatSegmentationModel(encoder, num_classes=num_classes, fpn_channels=256, dropout=dropout)
+
+
 def seresnext101_fpnsum256(num_classes=1, dropout=0.0):
     encoder = E.SEResNeXt101Encoder()
-    return FPNSumSegmentationModel(
-        encoder, num_classes=num_classes, fpn_channels=256, dropout=dropout
-    )
+    return FPNSumSegmentationModel(encoder, num_classes=num_classes, fpn_channels=256, dropout=dropout)
 
 
 def resnet152_fpncat256(num_classes=1, dropout=0.0):
