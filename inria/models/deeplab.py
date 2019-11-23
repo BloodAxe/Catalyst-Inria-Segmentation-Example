@@ -11,6 +11,7 @@ from ..dataset import OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY, 
 __all__ = [
     "DeeplabV3SegmentationModel",
     "resnet34_deeplab128",
+    "seresnext101_deeplab256"
 ]
 
 
@@ -62,3 +63,8 @@ class DeeplabV3SegmentationModel(nn.Module):
 def resnet34_deeplab128(num_classes=1, dropout=0.0):
     encoder = E.Resnet34Encoder()
     return DeeplabV3SegmentationModel(encoder, num_classes=num_classes, high_level_bottleneck=128, dropout=dropout)
+
+
+def seresnext101_deeplab256(num_classes=1, dropout=0.0):
+    encoder = E.SEResNeXt101Encoder()
+    return DeeplabV3SegmentationModel(encoder, num_classes=num_classes, high_level_bottleneck=256, dropout=dropout)

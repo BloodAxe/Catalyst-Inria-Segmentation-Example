@@ -17,6 +17,9 @@ def get_model(model_name: str, dropout=0.0) -> nn.Module:
         # FPN family using summation
         "seresnext101_fpnsum256": fpn.seresnext101_fpnsum256,
 
+        # RFPN family
+        "resnet34_rfpncat128": fpn.resnet34_rfpncat128,
+
         # UNet
         "resnet34_unet32": unet.resnet34_unet32,
         "resnet34_unet32v2": unet.resnet34_unet32v2,
@@ -24,7 +27,8 @@ def get_model(model_name: str, dropout=0.0) -> nn.Module:
         "seresnext101_unet64": unet.seresnext101_unet64,
 
         # Deeplab
-        "resnet34_deeplab128": deeplab.resnet34_deeplab128
+        "resnet34_deeplab128": deeplab.resnet34_deeplab128,
+        "seresnext101_deeplab128": deeplab.seresnext101_deeplab256
     }
 
     return registry[model_name.lower()](dropout=dropout)
