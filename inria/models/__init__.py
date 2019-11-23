@@ -29,7 +29,7 @@ def get_model(model_name: str, dropout=0.0) -> nn.Module:
 
         # Deeplab
         "resnet34_deeplab128": deeplab.resnet34_deeplab128,
-        "seresnext101_deeplab128": deeplab.seresnext101_deeplab256
+        "seresnext101_deeplab256": deeplab.seresnext101_deeplab256
     }
 
     return registry[model_name.lower()](dropout=dropout)
