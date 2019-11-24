@@ -18,6 +18,8 @@ __all__ = [
     "seresnext101_fpncat256",
     "seresnext101_fpnsum256",
     "effnetB4_fpncat128",
+    "densenet169_fpncat256",
+    "densenet201_fpncat256"
 ]
 
 
@@ -229,6 +231,16 @@ def resnet34_rfpncat128(num_classes=1, dropout=0.0):
 def seresnext50_fpncat128(num_classes=1, dropout=0.0):
     encoder = E.SEResNeXt50Encoder()
     return FPNCatSegmentationModel(encoder, num_classes=num_classes, fpn_channels=128, dropout=dropout)
+
+
+def densenet201_fpncat256(num_classes=1, dropout=0.0):
+    encoder = E.DenseNet201Encoder()
+    return FPNCatSegmentationModel(encoder, num_classes=num_classes, fpn_channels=256, dropout=dropout)
+
+
+def densenet169_fpncat256(num_classes=1, dropout=0.0):
+    encoder = E.DenseNet169Encoder()
+    return FPNCatSegmentationModel(encoder, num_classes=num_classes, fpn_channels=256, dropout=dropout)
 
 
 def seresnext101_fpncat256(num_classes=1, dropout=0.0):
