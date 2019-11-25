@@ -19,7 +19,7 @@ __all__ = [
     "seresnext101_fpnsum256",
     "effnetB4_fpncat128",
     "densenet169_fpncat256",
-    "densenet201_fpncat256"
+    "densenet201_fpncat256",
 ]
 
 
@@ -64,51 +64,6 @@ class FPNSumSegmentationModel(nn.Module):
             OUTPUT_MASK_8_KEY: dsv[2],
             OUTPUT_MASK_16_KEY: dsv[1],
             OUTPUT_MASK_32_KEY: dsv[0],
-        }
-
-        return output
-
-
-class FPNCatSegmentationModel(nn.Module):
-    def __init__(
-        self,
-        encoder: EncoderModule,
-        num_classes: int,
-        dropout=0.25,
-        abn_block=ABN,
-        fpn_channels=256,
-        full_size_mask=True,
-    ):
-        super().__init__()
-        self.encoder = encoder
-
-        self.decoder = FPNCatDecoder(
-            feature_maps=encoder.output_filters,
-            num_classes=num_classes,
-            fpn_channels=fpn_channels,
-            abn_block=abn_block,
-            dropout=dropout,
-        )
-
-        self.full_size_mask = full_size_mask
-
-    def forward(self, x):
-        x, pad = pad_image_tensor(x, 32)
-        enc_features = self.encoder(x)
-
-        # Decode mask
-        mask, dsv = self.decoder(enc_features)
-
-        if self.full_size_mask:
-            mask = F.interpolate(mask, size=x.size()[2:], mode="bilinear", align_corners=False)
-            mask = unpad_image_tensor(mask, pad)
-
-        output = {
-            OUTPUT_MASK_KEY: mask,
-            OUTPUT_MASK_4_KEY: dsv[0],
-            OUTPUT_MASK_8_KEY: dsv[1],
-            OUTPUT_MASK_16_KEY: dsv[2],
-            OUTPUT_MASK_32_KEY: dsv[3],
         }
 
         return output
