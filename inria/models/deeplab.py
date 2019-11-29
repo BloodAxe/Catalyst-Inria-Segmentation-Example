@@ -8,11 +8,7 @@ from torch.nn import functional as F
 
 from ..dataset import OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY, OUTPUT_MASK_32_KEY, OUTPUT_MASK_KEY
 
-__all__ = [
-    "DeeplabV3SegmentationModel",
-    "resnet34_deeplab128",
-    "seresnext101_deeplab256"
-]
+__all__ = ["DeeplabV3SegmentationModel", "resnet34_deeplab128", "seresnext101_deeplab256"]
 
 
 class DeeplabV3SegmentationModel(nn.Module):
@@ -52,10 +48,7 @@ class DeeplabV3SegmentationModel(nn.Module):
             mask = F.interpolate(mask, size=x.size()[2:], mode="bilinear", align_corners=False)
             mask = unpad_image_tensor(mask, pad)
 
-        output = {
-            OUTPUT_MASK_KEY: mask,
-            OUTPUT_MASK_32_KEY: dsv,
-        }
+        output = {OUTPUT_MASK_KEY: mask, OUTPUT_MASK_32_KEY: dsv}
 
         return output
 

@@ -375,7 +375,7 @@ def main():
             verbose=verbose,
             main_metric=main_metric,
             minimize_metric=False,
-            state_kwargs={"cmd_args": vars(args)},
+            checkpoint_data={"cmd_args": vars(args)},
         )
 
         # Training is finished. Let's run predictions using best checkpoint weights
