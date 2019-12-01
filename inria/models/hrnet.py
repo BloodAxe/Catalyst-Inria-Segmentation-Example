@@ -4,11 +4,9 @@ from pytorch_toolbelt.modules.encoders import EncoderModule
 from torch import nn
 from torch.nn import functional as F
 
-from ..dataset import (
-    OUTPUT_MASK_KEY,
-)
+from ..dataset import OUTPUT_MASK_KEY
 
-__all__ = ["HRNetSegmentationModel", "hrnet18"]
+__all__ = ["HRNetSegmentationModel", "hrnet18", "hrnet34", "hrnet48"]
 
 
 class HRNetSegmentationModel(nn.Module):
