@@ -32,16 +32,16 @@ class HRNetSegmentationModel(nn.Module):
         return output
 
 
-def hrnet18(num_classes=5, dropout=0.0, pretrained=True):
+def hrnet18(num_classes=1, dropout=0.0, pretrained=True):
     encoder = E.HRNetV2Encoder18(pretrained=pretrained)
     return HRNetSegmentationModel(encoder, num_classes=num_classes, dropout=dropout)
 
 
-def hrnet34(num_classes=5, dropout=0.0, pretrained=True):
+def hrnet34(num_classes=1, dropout=0.0, pretrained=True):
     encoder = E.HRNetV2Encoder34(pretrained=pretrained)
     return HRNetSegmentationModel(encoder, num_classes=num_classes, dropout=dropout)
 
 
-def hrnet48(num_classes=5, dropout=0.0, pretrained=True):
+def hrnet48(num_classes=1, dropout=0.0, pretrained=True):
     encoder = E.HRNetV2Encoder48(pretrained=pretrained)
     return HRNetSegmentationModel(encoder, num_classes=num_classes, dropout=dropout)
