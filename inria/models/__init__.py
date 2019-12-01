@@ -27,7 +27,9 @@ def get_model(model_name: str, dropout=0.0, pretrained=True) -> nn.Module:
         "seresnext101_deeplab128": deeplab.seresnext101_deeplab256,
 
         # HRNet
-        "hrnet18": hrnet.hrnet18
+        "hrnet18": hrnet.hrnet18,
+        "hrnet34": hrnet.hrnet34,
+        "hrnet48": hrnet.hrnet48
     }
 
     return registry[model_name.lower()](dropout=dropout, pretrained=pretrained)
