@@ -260,16 +260,16 @@ def main():
                 unlabeled_label, batch_size=batch_size, num_workers=num_workers, pin_memory=True
             )
 
-            if train_sampler is not None:
-                num_samples = 2 * train_sampler.num_samples
-            else:
-                num_samples = 2 * len(train_ds)
+            # if train_sampler is not None:
+            #     num_samples = 2 * train_sampler.num_samples
+            # else:
+            #     num_samples = 2 * len(train_ds)
+            # weights = compute_sample_weight("balanced", [0] * len(train_ds) + [1] * len(unlabeled_label))
 
-            weights = compute_sample_weight("balanced", [0] * len(train_ds) + [1] * len(unlabeled_label))
-
-            train_sampler = WeightedRandomSampler(weights, num_samples, replacement=True)
+            # train_sampler = WeightedRandomSampler(weights, num_samples, replacement=True)
             train_ds = train_ds + unlabeled_train
-
+            train_sampler = None
+            
             callbacks += [
                 BCEOnlinePseudolabelingCallback2d(
                     unlabeled_train,
