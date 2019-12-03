@@ -58,18 +58,6 @@ def read_inria_mask_with_pseudolabel(fname):
     return mask
 
 
-def padding_for_rotation(image_size, rotation):
-    r = math.sqrt((image_size[0] / 2) ** 2 + (image_size[1] / 2) ** 2)
-
-    rot_angle_rads = math.radians(45 - rotation)
-
-    pad_h = int(r * math.cos(rot_angle_rads) - image_size[0] // 2)
-    pad_w = int(r * math.cos(rot_angle_rads) - image_size[1] // 2)
-
-    print("Image padding for rotation", rotation, pad_w, pad_h, r)
-    return pad_h, pad_w
-
-
 def compute_boundary_mask(mask: np.ndarray) -> np.ndarray:
     dilated = binary_dilation(mask, structure=np.ones((5, 5), dtype=np.bool))
     dilated = binary_fill_holes(dilated)
@@ -127,7 +115,7 @@ class InriaImageMaskDataset(Dataset, PseudolabelDatasetMixin):
             INPUT_IMAGE_KEY: tensor_from_rgb_image(data["image"]),
             INPUT_IMAGE_ID_KEY: self.image_ids[index],
             INPUT_INDEX_KEY: index,
-            INPUT_MASK_KEY: tensor_from_mask_image(data["mask"]).float()
+            INPUT_MASK_KEY: tensor_from_mask_image(data["mask"]).float(),
         }
 
         return sample
@@ -306,6 +294,8 @@ def get_datasets(
 
         train_mask = [os.path.join(data_dir, "train", "gt", f"{fname}.tif") for fname in train_data]
         valid_mask = [os.path.join(data_dir, "train", "gt", f"{fname}.tif") for fname in valid_data]
+
+        train_transform = A.Compose([crop_transform(image_size), train_transform])
 
         trainset = InriaImageMaskDataset(train_img, train_mask, use_edges=use_edges, transform=train_transform)
         num_train_samples = int(len(trainset) * (5000 * 5000) / (image_size[0] * image_size[1]))
