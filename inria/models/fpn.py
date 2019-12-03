@@ -112,57 +112,6 @@ class FPNCatSegmentationModel(nn.Module):
         return output
 
 
-class DualFPNCatSegmentationModel(nn.Module):
-    def __init__(
-        self,
-        encoder: EncoderModule,
-        localization_classes=1,
-        damage_classes=5,
-        dropout=0.25,
-        abn_block=ABN,
-        fpn_channels=256,
-        full_size_mask=True,
-    ):
-        super().__init__()
-        self.encoder = encoder
-
-        self.pre_decoder = FPNCatDecoder(
-            feature_maps=encoder.output_filters,
-            output_channels=localization_classes,
-            fpn_channels=fpn_channels,
-            abn_block=abn_block,
-            dropout=dropout,
-        )
-
-        self.post_decoder = FPNCatDecoder(
-            feature_maps=[f + f for f in encoder.output_filters],
-            output_channels=damage_classes,
-            fpn_channels=fpn_channels,
-            abn_block=abn_block,
-            dropout=dropout,
-        )
-
-        self.full_size_mask = full_size_mask
-
-    def forward(self, image_pre=None, image_post=None):
-        pre_features = self.encoder(image_pre)
-        post_features = self.encoder(image_post)
-
-        # Decode mask
-        pre_mask = self.pre_decoder(pre_features)
-
-        features = [torch.cat((pre, post), dim=1) for (pre, post) in zip(pre_features, post_features)]
-        post_mask = self.post_decoder(features)
-
-        if self.full_size_mask:
-            pre_mask = F.interpolate(pre_mask, size=image_pre.size()[2:], mode="bilinear", align_corners=False)
-            post_mask = F.interpolate(post_mask, size=image_post.size()[2:], mode="bilinear", align_corners=False)
-
-        output = {OUTPUT_MASK_PRE_KEY: pre_mask, OUTPUT_MASK_POST_KEY: post_mask}
-
-        return output
-
-
 def resnet34_fpncat128(num_classes=5, dropout=0.0, pretrained=True):
     encoder = E.Resnet34Encoder(pretrained=pretrained)
     return FPNCatSegmentationModel(encoder, num_classes=num_classes, fpn_channels=128, dropout=dropout)
