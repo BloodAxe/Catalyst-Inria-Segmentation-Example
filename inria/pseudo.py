@@ -64,6 +64,7 @@ class BCEOnlinePseudolabelingCallback2d(Callback):
         self.should_relabel = (
             self.last_labeled_epoch is None or (state.epoch - self.last_labeled_epoch) % self.label_frequency == 0
         )
+        self.last_labeled_epoch = state.epoch
 
     def get_probabilities(self, state: RunnerState):
         probs = state.output[self.output_key].detach().sigmoid()
