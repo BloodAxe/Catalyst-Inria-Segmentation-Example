@@ -43,11 +43,15 @@ TEST_LOCATIONS = ["bellingham", "bloomington", "innsbruck", "sfo", "tyrol-e"]
 
 def read_inria_image(fname):
     image = cv2.imread(fname)
+    if image is None:
+        raise IOError("Cannot read " + fname)
     return image
 
 
 def read_inria_mask(fname):
     mask = fs.read_image_as_is(fname)
+    if mask is None:
+        raise IOError("Cannot read " + fname)
     cv2.threshold(mask, thresh=0, maxval=1, type=cv2.THRESH_BINARY, dst=mask)
     return mask
 
@@ -319,15 +323,20 @@ def get_datasets(
         train_img = [os.path.join(data_dir, x) for x in train_img]
         train_mask = [os.path.join(data_dir, x) for x in train_mask]
 
+        if fast:
+            train_img = train_img[:128]
+            train_mask = train_mask[:128]
+
         trainset = InriaImageMaskDataset(train_img, train_mask, use_edges=use_edges, transform=train_transform)
 
         valid_data = []
-        for loc in zip(locations):
+        for loc in locations:
             for i in range(1, 6):
                 valid_data.append(f"{loc}{i}")
 
         valid_img = [os.path.join(data_dir, "train", "images", f"{fname}.tif") for fname in valid_data]
         valid_mask = [os.path.join(data_dir, "train", "gt", f"{fname}.tif") for fname in valid_data]
+
 
         validset = InrialTiledImageMaskDataset(
             valid_img,
