@@ -11,7 +11,6 @@ import numpy as np
 import torch
 from catalyst.dl import (
     SupervisedRunner,
-    EarlyStoppingCallback,
     CriterionCallback,
     OptimizerCallback,
     SchedulerCallback,
@@ -23,11 +22,9 @@ from pytorch_toolbelt.utils import fs
 from pytorch_toolbelt.utils.catalyst import ShowPolarBatchesCallback, PixelAccuracyCallback
 from pytorch_toolbelt.utils.random import set_manual_seed
 from pytorch_toolbelt.utils.torch_utils import count_parameters, transfer_weights, get_optimizable_parameters
-from sklearn.utils import compute_sample_weight
 from torch import nn
 from torch.optim.lr_scheduler import CyclicLR
-from torch.utils.data import DataLoader, WeightedRandomSampler
-from tqdm import tqdm
+from torch.utils.data import DataLoader
 
 from inria.dataset import (
     read_inria_image,
@@ -42,7 +39,6 @@ from inria.dataset import (
     OUTPUT_MASK_16_KEY,
     OUTPUT_MASK_32_KEY,
 )
-
 from inria.factory import visualize_inria_predictions, predict
 from inria.losses import get_loss, AdaptiveMaskLoss2d
 from inria.metric import JaccardMetricPerImage

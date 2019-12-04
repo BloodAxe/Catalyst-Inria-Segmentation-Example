@@ -245,22 +245,19 @@ def get_datasets(
     :return: (train_loader, valid_loader)
     """
 
-    is_whole_image_input = train_mode == "random"
-
     if augmentation == "hard":
-        train_transform = hard_augmentations(image_size, is_whole_image_input)
+        train_transform = hard_augmentations()
     elif augmentation == "medium":
-        train_transform = medium_augmentations(image_size, is_whole_image_input)
+        train_transform = medium_augmentations()
     elif augmentation == "light":
-        train_transform = light_augmentations(image_size, is_whole_image_input)
+        train_transform = light_augmentations()
     elif augmentation == "safe":
-        train_transform = safe_augmentations(image_size, is_whole_image_input)
+        train_transform = safe_augmentations()
     else:
-        assert not is_whole_image_input
         train_transform = A.Normalize()
 
     valid_transform = A.Normalize()
-
+    assert train_mode in {"random", "tiles"}
     if train_mode == "random":
         locations = TRAIN_LOCATIONS
 
@@ -321,6 +318,12 @@ def get_datasets(
         valid_img = inria_tiles[inria_tiles["train"] == 0]["image"].tolist()
         valid_mask = inria_tiles[inria_tiles["train"] == 0]["mask"].tolist()
 
+        train_img = [os.path.join(data_dir, x) for x in train_img]
+        train_mask = [os.path.join(data_dir, x) for x in train_mask]
+
+        valid_img = [os.path.join(data_dir, x) for x in valid_img]
+        valid_mask = [os.path.join(data_dir, x) for x in valid_mask]
+
         if fast:
             train_img = train_img[:128]
             train_mask = train_mask[:128]
@@ -352,11 +355,11 @@ def get_pseudolabeling_dataset(data_dir: str, include_masks: bool, image_size=(2
     is_whole_image_input = False
 
     if augmentation == "hard":
-        transfrom = hard_augmentations(image_size, is_whole_image_input)
+        transfrom = hard_augmentations()
     elif augmentation == "medium":
-        transfrom = medium_augmentations(image_size, is_whole_image_input)
+        transfrom = medium_augmentations()
     elif augmentation == "light":
-        transfrom = light_augmentations(image_size, is_whole_image_input)
+        transfrom = light_augmentations()
     else:
         transfrom = A.Normalize()
 

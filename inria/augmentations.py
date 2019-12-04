@@ -24,8 +24,6 @@ def safe_augmentations():
                     A.CLAHE(),
                     A.HueSaturationValue(),
                     A.RGBShift(),
-                    A.ChannelDropout(),
-                    A.ChannelShuffle(),
                     A.RandomGamma(),
                     A.NoOp(),
                 ]
@@ -35,16 +33,22 @@ def safe_augmentations():
     )
 
 
-def light_augmentations(image_size, whole_image_input=True, rot_angle=5):
-
+def light_augmentations():
     return A.Compose(
         [
+            A.HorizontalFlip(),
+            A.MaskDropout(5),
             A.ShiftScaleRotate(scale_limit=0.125, rotate_limit=15, border_mode=cv2.BORDER_CONSTANT),
-            # D4 Augmentations
-            A.Compose([A.Transpose(), A.RandomRotate90()]),
-            # Spatial-preserving augmentations:
-            A.OneOf([A.CoarseDropout(), A.GaussNoise()]),
-            A.OneOf([A.RandomBrightnessContrast(), A.CLAHE(), A.HueSaturationValue(), A.RGBShift(), A.RandomGamma()]),
+            A.OneOf(
+                [
+                    A.RandomBrightnessContrast(),
+                    A.CLAHE(),
+                    A.HueSaturationValue(),
+                    A.RGBShift(),
+                    A.RandomGamma(),
+                    A.NoOp(),
+                ]
+            ),
             A.Normalize(),
         ]
     )

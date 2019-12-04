@@ -1,4 +1,3 @@
-from pytorch_toolbelt.inference.functional import pad_image_tensor, unpad_image_tensor
 from pytorch_toolbelt.modules import ABN
 from pytorch_toolbelt.modules import encoders as E
 from pytorch_toolbelt.modules.decoders import UNetDecoder, UNetDecoderV2
@@ -8,7 +7,7 @@ from torch.nn import functional as F
 
 from ..dataset import OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY, OUTPUT_MASK_32_KEY, OUTPUT_MASK_KEY
 
-__all__ = ["resnet34_unet32", "resnet34_unet32v2", "seresnext101_unet64", "seresnext50_unet64"]
+__all__ = ["resnet34_unet32", "resnet34_unet32v2"]
 
 
 class UnetSegmentationModel(nn.Module):
@@ -25,13 +24,15 @@ class UnetSegmentationModel(nn.Module):
         self.encoder = encoder
 
         self.decoder = UNetDecoder(
-            feature_maps=encoder.output_filters, decoder_features=unet_channels, mask_channels=num_classes
+            feature_maps=encoder.output_filters,
+            decoder_features=unet_channels,
+            mask_channels=num_classes,
+            dropout=dropout,
         )
 
         self.full_size_mask = full_size_mask
 
     def forward(self, x):
-        x, pad = pad_image_tensor(x, 32)
         enc_features = self.encoder(x)
 
         # Decode mask
@@ -39,7 +40,6 @@ class UnetSegmentationModel(nn.Module):
 
         if self.full_size_mask:
             mask = F.interpolate(mask, size=x.size()[2:], mode="bilinear", align_corners=False)
-            mask = unpad_image_tensor(mask, pad)
 
         output = {OUTPUT_MASK_KEY: mask}
 
@@ -60,13 +60,15 @@ class UnetV2SegmentationModel(nn.Module):
         self.encoder = encoder
 
         self.decoder = UNetDecoderV2(
-            feature_maps=encoder.output_filters, decoder_features=unet_channels, mask_channels=num_classes
+            feature_maps=encoder.output_filters,
+            decoder_features=unet_channels,
+            mask_channels=num_classes,
+            dropout=dropout,
         )
 
         self.full_size_mask = full_size_mask
 
     def forward(self, x):
-        x, pad = pad_image_tensor(x, 32)
         enc_features = self.encoder(x)
 
         # Decode mask
@@ -74,7 +76,6 @@ class UnetV2SegmentationModel(nn.Module):
 
         if self.full_size_mask:
             mask = F.interpolate(mask, size=x.size()[2:], mode="bilinear", align_corners=False)
-            mask = unpad_image_tensor(mask, pad)
 
         output = {
             OUTPUT_MASK_KEY: mask,
@@ -87,21 +88,15 @@ class UnetV2SegmentationModel(nn.Module):
         return output
 
 
-def resnet34_unet32(num_classes=1, dropout=0.0):
-    encoder = E.Resnet34Encoder()
+def resnet34_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
+    encoder = E.Resnet34Encoder(pretrained=pretrained)
+    if input_channels != 3:
+        encoder.change_input_channels(input_channels)
     return UnetSegmentationModel(encoder, num_classes=num_classes, unet_channels=32, dropout=dropout)
 
 
-def resnet34_unet32v2(num_classes=1, dropout=0.0):
-    encoder = E.Resnet34Encoder()
+def resnet34_unet32v2(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
+    encoder = E.Resnet34Encoder(pretrained=pretrained)
+    if input_channels != 3:
+        encoder.change_input_channels(input_channels)
     return UnetV2SegmentationModel(encoder, num_classes=num_classes, unet_channels=32, dropout=dropout)
-
-
-def seresnext50_unet64(num_classes=1, dropout=0.0):
-    encoder = E.SEResNeXt50Encoder()
-    return UnetSegmentationModel(encoder, num_classes=num_classes, unet_channels=64, dropout=dropout)
-
-
-def seresnext101_unet64(num_classes=1, dropout=0.0):
-    encoder = E.SEResNeXt101Encoder()
-    return UnetSegmentationModel(encoder, num_classes=num_classes, unet_channels=64, dropout=dropout)
