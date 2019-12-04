@@ -258,8 +258,9 @@ def get_datasets(
 
     valid_transform = A.Normalize()
     assert train_mode in {"random", "tiles"}
+    locations = TRAIN_LOCATIONS
+
     if train_mode == "random":
-        locations = TRAIN_LOCATIONS
 
         # Empirical weights for regions (for oversampling hard regions)
         # locations_weights = [1, 2, 3, 1, 1]
@@ -315,24 +316,30 @@ def get_datasets(
         train_img = inria_tiles[inria_tiles["train"] == 1]["image"].tolist()
         train_mask = inria_tiles[inria_tiles["train"] == 1]["mask"].tolist()
 
-        valid_img = inria_tiles[inria_tiles["train"] == 0]["image"].tolist()
-        valid_mask = inria_tiles[inria_tiles["train"] == 0]["mask"].tolist()
-
         train_img = [os.path.join(data_dir, x) for x in train_img]
         train_mask = [os.path.join(data_dir, x) for x in train_mask]
 
-        valid_img = [os.path.join(data_dir, x) for x in valid_img]
-        valid_mask = [os.path.join(data_dir, x) for x in valid_mask]
-
-        if fast:
-            train_img = train_img[:128]
-            train_mask = train_mask[:128]
-
-            valid_img = valid_img[:128]
-            valid_mask = valid_mask[:128]
-
         trainset = InriaImageMaskDataset(train_img, train_mask, use_edges=use_edges, transform=train_transform)
-        validset = InriaImageMaskDataset(valid_img, valid_mask, use_edges=use_edges, transform=valid_transform)
+
+        valid_data = []
+        for loc in zip(locations):
+            for i in range(1, 6):
+                valid_data.append(f"{loc}{i}")
+
+        valid_img = [os.path.join(data_dir, "train", "images", f"{fname}.tif") for fname in valid_data]
+        valid_mask = [os.path.join(data_dir, "train", "gt", f"{fname}.tif") for fname in valid_data]
+
+        validset = InrialTiledImageMaskDataset(
+            valid_img,
+            valid_mask,
+            use_edges=use_edges,
+            transform=valid_transform,
+            # For validation we don't want tiles overlap
+            tile_size=image_size,
+            tile_step=image_size,
+            target_shape=(5000, 5000),
+        )
+
         train_sampler = None
     else:
         raise ValueError(train_mode)
