@@ -10,6 +10,3 @@
 #python fit_predict.py -m seresnext101_fpncat256 --fp16 -b 32 -w 16 -dd /home/bloodaxe/data/AerialImageDataset --size 512 -s cosr -o RAdam -a safe -lr 1e-4 -e 50 -d 0.05 -c runs/Nov23_09_18_seresnext101_fpncat256_fp16/main/checkpoints/best.pth -v --show  -l focal 1
 python fit_predict.py -m seresnext101_deeplab256 --fp16 -b 32 -w 16 -dd /home/bloodaxe/data/AerialImageDataset --size 512 -s cosr -o RAdam -a medium -lr 1e-4 -e 75 -d 0.1 --transfer runs/Nov23_17_14_seresnext101_deeplab256_fp16/main/checkpoints/best.pth -v  -l focal 1
 python fit_predict.py -m seresnext101_rfpncat256 --fp16 -b 24 -w 16 -dd /home/bloodaxe/data/AerialImageDataset --size 512 -s cosr -o RAdam -a medium -lr 1e-4 -e 75 -d 0.1 --transfer runs/Nov23_09_18_seresnext101_fpncat256_fp16/main/checkpoints/best.pth -v  -l focal 1
-
-
-python fit_predict.py -m hrnet48 -b 32 -w 16 -dd /home/bloodaxe/data/AerialImageDataset --size 512 -s cos -o RAdam -a medium -lr 1e-3 -e 200 -d 0.1 -v -l bce 1

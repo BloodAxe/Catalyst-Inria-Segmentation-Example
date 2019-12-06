@@ -11,8 +11,8 @@ def get_model(model_name: str, dropout=0.0, pretrained=True) -> nn.Module:
         "resnet34_fpncat128": fpn.resnet34_fpncat128,
         "resnet152_fpncat256": fpn.resnet152_fpncat256,
         "seresnext50_fpncat128": fpn.seresnext50_fpncat128,
-        "effnetB4_fpncat128": fpn.effnetB4_fpncat128,
         "seresnext101_fpncat256": fpn.seresnext101_fpncat256,
+
 
         # FPN family using summation
         "seresnext101_fpnsum256": fpn.seresnext101_fpnsum256,

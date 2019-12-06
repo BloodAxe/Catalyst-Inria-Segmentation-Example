@@ -17,7 +17,7 @@ def get_scheduler(scheduler_name: str, optimizer, lr, num_epochs, batches_in_epo
 
     if scheduler_name.lower() in {"1cycle", "one_cycle"}:
         return OneCycleLRWithWarmup(
-            optimizer, lr_range=(lr, 1e-6), num_steps=batches_in_epoch, warmup_fraction=0.05, decay_fraction=0.1
+            optimizer, lr_range=(lr, 1e-6), num_steps=batches_in_epoch * num_epochs, warmup_fraction=0.05, decay_fraction=0.1
         )
 
     if scheduler_name.lower() == "exp":

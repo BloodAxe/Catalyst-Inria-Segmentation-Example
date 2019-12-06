@@ -9,6 +9,7 @@ from datetime import datetime
 import cv2
 import numpy as np
 import torch
+from catalyst.contrib.schedulers import OneCycleLRWithWarmup
 from catalyst.dl import (
     SupervisedRunner,
     CriterionCallback,
@@ -335,7 +336,7 @@ def main():
         scheduler = get_scheduler(
             scheduler_name, optimizer, lr=learning_rate, num_epochs=num_epochs, batches_in_epoch=len(loaders["train"])
         )
-        if isinstance(scheduler, CyclicLR):
+        if isinstance(scheduler, [CyclicLR, OneCycleLRWithWarmup]):
             callbacks += [SchedulerCallback(mode="batch")]
 
         print("Train session    :", checkpoint_prefix)

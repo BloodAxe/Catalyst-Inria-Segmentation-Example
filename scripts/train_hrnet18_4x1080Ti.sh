@@ -1,0 +1,1 @@
+python fit_predict.py -m hrnet18 --fp16 -b 64 -w 16 -dd /home/bloodaxe/data/AerialImageDataset --size 512 -s 1cycle -o SGD -a light -lr 1e-3 -e 100 -d 0.1 --criterion bce 1 -v
