@@ -336,7 +336,7 @@ def main():
         scheduler = get_scheduler(
             scheduler_name, optimizer, lr=learning_rate, num_epochs=num_epochs, batches_in_epoch=len(loaders["train"])
         )
-        if isinstance(scheduler, [CyclicLR, OneCycleLRWithWarmup]):
+        if isinstance(scheduler, (CyclicLR, OneCycleLRWithWarmup)):
             callbacks += [SchedulerCallback(mode="batch")]
 
         print("Train session    :", checkpoint_prefix)
