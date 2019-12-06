@@ -57,11 +57,10 @@ def light_augmentations():
 def medium_augmentations():
     return A.Compose(
         [
+            A.HorizontalFlip(),
             A.ShiftScaleRotate(scale_limit=0.25, rotate_limit=15, border_mode=cv2.BORDER_CONSTANT),
             # Add occasion blur/sharpening
             A.OneOf([A.GaussianBlur(), A.MotionBlur(), A.IAASharpen()]),
-            # D4 Augmentations
-            A.Compose([A.Transpose(), A.RandomRotate90()]),
             # Spatial-preserving augmentations:
             A.OneOf([A.CoarseDropout(), A.MaskDropout(max_objects=3), A.NoOp()]),
             A.GaussNoise(),
@@ -76,16 +75,19 @@ def medium_augmentations():
 def hard_augmentations():
     return A.Compose(
         [
-            A.ShiftScaleRotate(scale_limit=0.5, rotate_limit=45, border_mode=cv2.BORDER_CONSTANT),
+            A.HorizontalFlip(),
+            A.RandomGridShuffle(),
+            A.ShiftScaleRotate(scale_limit=0.5, rotate_limit=45, border_mode=cv2.BORDER_CONSTANT, mask_value=0, value=0),
+            A.ElasticTransform(border_mode=cv2.BORDER_CONSTANT, mask_value=0, value=0),
+
             # Add occasion blur
             A.OneOf([A.GaussianBlur(), A.GaussNoise(), A.IAAAdditiveGaussianNoise(), A.NoOp()]),
             # D4 Augmentations
-            A.Compose([A.Transpose(), A.RandomRotate90()]),
-            A.OneOf([A.CoarseDropout(), A.MaskDropout(max_objects=3), A.NoOp()]),
+            A.OneOf([A.CoarseDropout(), A.MaskDropout(max_objects=10), A.NoOp()]),
             # Spatial-preserving augmentations:
             A.OneOf(
                 [
-                    A.RandomBrightnessContrast(),
+                    A.RandomBrightnessContrast(brightness_by_max=True),
                     A.CLAHE(),
                     A.HueSaturationValue(),
                     A.RGBShift(),
