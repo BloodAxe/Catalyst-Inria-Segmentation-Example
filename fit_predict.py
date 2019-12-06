@@ -194,7 +194,7 @@ def main():
 
         callbacks += [
             CriterionAggregatorCallback(prefix="loss", loss_keys=losses),
-            OptimizerCallback(accumulation_steps=accumulation_steps, decouple_weight_decay=True),
+            OptimizerCallback(accumulation_steps=accumulation_steps, decouple_weight_decay=False),
         ]
 
         parameters = get_lr_decay_parameters(model.named_parameters(), learning_rate, {"encoder": 0.1})
@@ -329,7 +329,7 @@ def main():
 
         callbacks += [
             CriterionAggregatorCallback(prefix="loss", loss_keys=losses),
-            OptimizerCallback(accumulation_steps=accumulation_steps, decouple_weight_decay=True),
+            OptimizerCallback(accumulation_steps=accumulation_steps, decouple_weight_decay=False),
         ]
 
         optimizer = get_optimizer(optimizer_name, get_optimizable_parameters(model), learning_rate, weight_decay=weight_decay)
