@@ -39,16 +39,11 @@ def light_augmentations():
             A.HorizontalFlip(),
             A.MaskDropout(5),
             A.ShiftScaleRotate(scale_limit=0.125, rotate_limit=15, border_mode=cv2.BORDER_CONSTANT),
-            A.OneOf(
-                [
-                    A.RandomBrightnessContrast(),
-                    A.CLAHE(),
-                    A.HueSaturationValue(),
-                    A.RGBShift(),
-                    A.RandomGamma(),
-                    A.NoOp(),
-                ]
-            ),
+            A.RandomBrightnessContrast(),
+            A.HueSaturationValue(),
+            A.CLAHE(),
+            A.RGBShift(),
+            A.RandomGamma(),
             A.Normalize(),
         ]
     )
