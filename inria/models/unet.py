@@ -4,7 +4,7 @@ from typing import Union, Callable, List
 import torch
 from pytorch_toolbelt.modules import ABN, ACT_RELU
 from pytorch_toolbelt.modules import encoders as E
-from pytorch_toolbelt.modules.decoders import UNetDecoderV2, DecoderModule
+from pytorch_toolbelt.modules.decoders import DecoderModule
 from pytorch_toolbelt.modules.encoders import EncoderModule
 from torch import nn
 from torch.nn import functional as F
