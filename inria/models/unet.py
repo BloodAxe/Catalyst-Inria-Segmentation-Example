@@ -11,7 +11,7 @@ from torch.nn import functional as F
 
 from ..dataset import OUTPUT_MASK_KEY
 
-__all__ = ["seresnext50_unet64"]
+__all__ = ["seresnext50_unet64", "hrnet18_unet64"]
 
 
 class ConvBottleneck(nn.Module):
@@ -141,6 +141,20 @@ def seresnext50_unet64(input_channels=3, num_classes=1, dropout=0.0, pretrained=
         encoder,
         num_classes=num_classes,
         unet_channels=[64, 128, 256, 256],
+        dropout=dropout,
+        abn_block=partial(ABN, activation=ACT_RELU),
+    )
+
+
+def hrnet18_unet64(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
+    encoder = E.HRNetV2Encoder18(pretrained=pretrained, layers=[1, 2, 3, 4])
+    if input_channels != 3:
+        encoder.change_input_channels(input_channels)
+
+    return UnetV2SegmentationModel(
+        encoder,
+        num_classes=num_classes,
+        unet_channels=[64, 128, 256],
         dropout=dropout,
         abn_block=partial(ABN, activation=ACT_RELU),
     )
