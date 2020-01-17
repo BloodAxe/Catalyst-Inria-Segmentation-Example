@@ -137,7 +137,7 @@ def main():
         print("Loaded model weights from:", args.checkpoint)
         report_checkpoint(checkpoint)
 
-    runner = SupervisedRunner(input_key=INPUT_IMAGE_KEY, output_key=None)
+    runner = SupervisedRunner(input_key=INPUT_IMAGE_KEY, output_key=None, device="cuda")
     main_metric = "jaccard"
     cmd_args = vars(args)
 

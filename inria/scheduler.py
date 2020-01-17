@@ -1,7 +1,7 @@
-import torch
-from torch.optim.lr_scheduler import ExponentialLR, CyclicLR, MultiStepLR, CosineAnnealingLR, CosineAnnealingWarmRestarts
-
 from catalyst.contrib.schedulers import OneCycleLRWithWarmup
+from torch.optim.lr_scheduler import ExponentialLR, CyclicLR, MultiStepLR, CosineAnnealingLR, \
+    CosineAnnealingWarmRestarts
+
 
 def get_scheduler(scheduler_name: str, optimizer, lr, num_epochs, batches_in_epoch=None):
     if scheduler_name is None or scheduler_name.lower() == "none":
