@@ -41,7 +41,7 @@ def light_augmentations():
         [
             A.HorizontalFlip(),
             A.MaskDropout(5),
-            A.ShiftScaleRotate(scale_limit=0.125, rotate_limit=15, border_mode=cv2.BORDER_CONSTANT),
+            A.ShiftScaleRotate(scale_limit=0.05, rotate_limit=15, border_mode=cv2.BORDER_CONSTANT),
             A.RandomBrightnessContrast(),
             A.HueSaturationValue(),
             A.CLAHE(),
@@ -56,7 +56,7 @@ def medium_augmentations():
     return A.Compose(
         [
             A.HorizontalFlip(),
-            A.ShiftScaleRotate(scale_limit=0.25, rotate_limit=15, border_mode=cv2.BORDER_CONSTANT),
+            A.ShiftScaleRotate(scale_limit=0.05, rotate_limit=15, border_mode=cv2.BORDER_CONSTANT),
             # Add occasion blur/sharpening
             A.OneOf([A.GaussianBlur(), A.MotionBlur(), A.IAASharpen()]),
             # Spatial-preserving augmentations:
@@ -76,7 +76,7 @@ def hard_augmentations():
             A.HorizontalFlip(),
             A.RandomGridShuffle(),
             A.ShiftScaleRotate(
-                scale_limit=0.5, rotate_limit=45, border_mode=cv2.BORDER_CONSTANT, mask_value=0, value=0
+                scale_limit=0.05, rotate_limit=45, border_mode=cv2.BORDER_CONSTANT, mask_value=0, value=0
             ),
             A.ElasticTransform(border_mode=cv2.BORDER_CONSTANT, mask_value=0, value=0),
             # Add occasion blur
