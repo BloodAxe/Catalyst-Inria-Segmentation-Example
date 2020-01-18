@@ -5,22 +5,19 @@ import collections
 import gc
 import os
 from datetime import datetime
+from functools import partial
 
 import cv2
 import numpy as np
 import torch
 from catalyst.contrib.schedulers import OneCycleLRWithWarmup
-from catalyst.dl import (
-    SupervisedRunner,
-    CriterionCallback,
-    OptimizerCallback,
-    SchedulerCallback,
-)
+from catalyst.dl import SupervisedRunner, CriterionCallback, OptimizerCallback, SchedulerCallback
 from catalyst.dl.callbacks import CriterionAggregatorCallback
 from catalyst.utils import load_checkpoint, unpack_checkpoint
 from pytorch_toolbelt.optimization.functional import get_lr_decay_parameters
 from pytorch_toolbelt.utils import fs
-from pytorch_toolbelt.utils.catalyst import ShowPolarBatchesCallback, PixelAccuracyCallback
+from pytorch_toolbelt.utils.catalyst import ShowPolarBatchesCallback, PixelAccuracyCallback, \
+    draw_binary_segmentation_predictions
 from pytorch_toolbelt.utils.random import set_manual_seed
 from pytorch_toolbelt.utils.torch_utils import count_parameters, transfer_weights, get_optimizable_parameters
 from torch import nn
@@ -39,8 +36,8 @@ from inria.dataset import (
     OUTPUT_MASK_4_KEY,
     OUTPUT_MASK_16_KEY,
     OUTPUT_MASK_32_KEY,
-)
-from inria.factory import visualize_inria_predictions, predict
+    INPUT_IMAGE_ID_KEY)
+from inria.factory import predict
 from inria.losses import get_loss, AdaptiveMaskLoss2d
 from inria.metric import JaccardMetricPerImage
 from inria.models import get_model
@@ -85,9 +82,7 @@ def main():
     parser.add_argument(
         "--warmup", default=0, type=int, help="Number of warmup epochs with reduced LR on encoder parameters"
     )
-    parser.add_argument(
-        "-wd", "--weight-decay", default=0, type=float, help="L2 weight decay"
-    )
+    parser.add_argument("-wd", "--weight-decay", default=0, type=float, help="L2 weight decay")
     parser.add_argument("--show", action="store_true")
     parser.add_argument("--dsv", action="store_true")
 
@@ -165,6 +160,13 @@ def main():
     ]
 
     if show:
+        visualize_inria_predictions = partial(
+            draw_binary_segmentation_predictions,
+            image_key=INPUT_IMAGE_KEY,
+            image_id_key=INPUT_IMAGE_ID_KEY,
+            targets_key=INPUT_MASK_KEY,
+            outputs_key=OUTPUT_MASK_KEY,
+        )
         default_callbacks += [ShowPolarBatchesCallback(visualize_inria_predictions, metric="accuracy", minimize=False)]
 
     train_ds, valid_ds, train_sampler = get_datasets(
@@ -266,7 +268,7 @@ def main():
             # train_sampler = WeightedRandomSampler(weights, num_samples, replacement=True)
             train_ds = train_ds + unlabeled_train
             train_sampler = None
-            
+
             callbacks += [
                 BCEOnlinePseudolabelingCallback2d(
                     unlabeled_train,
@@ -332,7 +334,9 @@ def main():
             OptimizerCallback(accumulation_steps=accumulation_steps, decouple_weight_decay=False),
         ]
 
-        optimizer = get_optimizer(optimizer_name, get_optimizable_parameters(model), learning_rate, weight_decay=weight_decay)
+        optimizer = get_optimizer(
+            optimizer_name, get_optimizable_parameters(model), learning_rate, weight_decay=weight_decay
+        )
         scheduler = get_scheduler(
             scheduler_name, optimizer, lr=learning_rate, num_epochs=num_epochs, batches_in_epoch=len(loaders["train"])
         )

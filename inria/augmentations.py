@@ -9,7 +9,12 @@ from typing import Tuple
 
 
 def crop_transform(image_size: Tuple[int, int]):
-    return A.RandomSizedCrop((int(image_size[0] * 0.5), int(image_size[0] * 2)), image_size[0], image_size[0])
+    return A.OneOrOther(
+        [
+            A.RandomSizedCrop((int(image_size[0] * 0.75), int(image_size[0] * 1.25)), image_size[0], image_size[0]),
+            A.CropNonEmptyMaskIfExists(image_size[0], image_size[1])
+        ]
+    )
 
 
 def safe_augmentations():
@@ -72,9 +77,10 @@ def hard_augmentations():
         [
             A.HorizontalFlip(),
             A.RandomGridShuffle(),
-            A.ShiftScaleRotate(scale_limit=0.5, rotate_limit=45, border_mode=cv2.BORDER_CONSTANT, mask_value=0, value=0),
+            A.ShiftScaleRotate(
+                scale_limit=0.5, rotate_limit=45, border_mode=cv2.BORDER_CONSTANT, mask_value=0, value=0
+            ),
             A.ElasticTransform(border_mode=cv2.BORDER_CONSTANT, mask_value=0, value=0),
-
             # Add occasion blur
             A.OneOf([A.GaussianBlur(), A.GaussNoise(), A.IAAAdditiveGaussianNoise(), A.NoOp()]),
             # D4 Augmentations
