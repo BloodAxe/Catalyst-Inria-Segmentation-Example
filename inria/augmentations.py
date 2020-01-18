@@ -10,7 +10,7 @@ from typing import Tuple
 
 def crop_transform(image_size: Tuple[int, int]):
     return A.OneOrOther(
-        A.RandomSizedCrop((int(image_size[0] * 0.75), int(image_size[0] * 1.25)), image_size[0], image_size[0]),
+        A.RandomSizedCrop((int(image_size[0] * 0.75), int(image_size[0] * 1.25)), image_size[0], image_size[1]),
         A.CropNonEmptyMaskIfExists(image_size[0], image_size[1])
     )
 
