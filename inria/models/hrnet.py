@@ -1,5 +1,5 @@
 from pytorch_toolbelt.modules import encoders as E
-from pytorch_toolbelt.modules.decoders import HRNetDecoder
+from pytorch_toolbelt.modules.decoders import HRNetSegmentationDecoder
 from pytorch_toolbelt.modules.encoders import EncoderModule
 from torch import nn
 from torch.nn import functional as F
@@ -10,11 +10,13 @@ __all__ = ["HRNetSegmentationModel", "hrnet18", "hrnet34", "hrnet48"]
 
 
 class HRNetSegmentationModel(nn.Module):
-    def __init__(self, encoder: EncoderModule, num_classes: int, dropout=0.25, full_size_mask=True):
+    def __init__(self, encoder: EncoderModule, num_classes: int, dropout=0.0, full_size_mask=True):
         super().__init__()
         self.encoder = encoder
 
-        self.decoder = HRNetDecoder(feature_maps=encoder.output_filters, output_channels=num_classes, dropout=dropout)
+        self.decoder = HRNetSegmentationDecoder(
+            feature_maps=encoder.output_filters, output_channels=num_classes, dropout=dropout
+        )
 
         self.full_size_mask = full_size_mask
 
