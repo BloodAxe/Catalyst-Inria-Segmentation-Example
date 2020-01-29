@@ -39,7 +39,7 @@ from inria.dataset import (
     INPUT_IMAGE_ID_KEY)
 from inria.factory import predict
 from inria.losses import get_loss, AdaptiveMaskLoss2d
-from inria.metric import JaccardMetricPerImage
+from inria.metric import JaccardMetricPerImage, OptimalThreshold
 from inria.models import get_model
 from inria.optim import get_optimizer
 from inria.pseudo import BCEOnlinePseudolabelingCallback2d
@@ -133,7 +133,7 @@ def main():
         report_checkpoint(checkpoint)
 
     runner = SupervisedRunner(input_key=INPUT_IMAGE_KEY, output_key=None, device="cuda")
-    main_metric = "jaccard"
+    main_metric = "optimized_jaccard"
     cmd_args = vars(args)
 
     current_time = datetime.now().strftime("%b%d_%H_%M")
@@ -156,7 +156,8 @@ def main():
 
     default_callbacks = [
         PixelAccuracyCallback(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY),
-        JaccardMetricPerImage(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY),
+        JaccardMetricPerImage(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY, prefix="jaccard"),
+        OptimalThreshold(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY, prefix="optimized_jaccard")
     ]
 
     if show:

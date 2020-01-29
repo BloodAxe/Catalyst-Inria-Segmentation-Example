@@ -21,6 +21,22 @@ def get_loss(loss_name: str, ignore_index=None):
         assert ignore_index is None
         return JaccardLoss(mode="binary")
 
+    if loss_name.lower() == "lovasz":
+        assert ignore_index is None
+        return BinaryLovaszLoss()
+
+    if loss_name.lower() == "log_jaccard":
+        assert ignore_index is None
+        return JaccardLoss(mode="binary", log_loss=True)
+
+    if loss_name.lower() == "dice":
+        assert ignore_index is None
+        return DiceLoss(mode="binary", log_loss=False)
+
+    if loss_name.lower() == "log_dice":
+        assert ignore_index is None
+        return DiceLoss(mode="binary", log_loss=True)
+
     raise KeyError(loss_name)
 
 

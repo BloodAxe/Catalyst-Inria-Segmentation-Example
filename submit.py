@@ -1,5 +1,7 @@
 import argparse
 import os
+import subprocess
+
 import cv2
 import numpy as np
 import torch
@@ -58,6 +60,8 @@ def main():
 
     model = get_model(args.model)
     unpack_checkpoint(checkpoint, model=model)
+    threshold = checkpoint["epoch_metrics"]["valid"].get("optimized_jaccard/threshold", 0.5)
+    print("Using threshold", threshold)
 
     model = nn.Sequential(PickModelOutput(model, OUTPUT_MASK_KEY), nn.Sigmoid())
 
@@ -78,23 +82,36 @@ def main():
     model = model.eval()
 
     mask = predict(model, read_inria_image("sample_color.jpg"), image_size=(512, 512), batch_size=args.batch_size)
-    mask = ((mask > 0.5) * 255).astype(np.uint8)
+    mask = ((mask > threshold) * 255).astype(np.uint8)
     name = os.path.join(run_dir, "sample_color.jpg")
     cv2.imwrite(name, mask)
 
-    predictions_dir = os.path.join(out_dir, f"test_predictions")
-    if args.tta is not None:
-        predictions_dir += f"_{args.tta}"
+    test_predictions_dir = os.path.join(out_dir, "test_predictions")
+    test_predictions_dir_compressed = os.path.join(out_dir, "test_predictions_compressed")
 
-    os.makedirs(predictions_dir, exist_ok=True)
+    if args.tta is not None:
+        test_predictions_dir += f"_{args.tta}"
+        test_predictions_dir_compressed += f"_{args.tta}"
+
+    os.makedirs(test_predictions_dir, exist_ok=True)
+    os.makedirs(test_predictions_dir_compressed, exist_ok=True)
 
     test_images = find_in_dir(os.path.join(data_dir, "test", "images"))
     for fname in tqdm(test_images, total=len(test_images)):
         image = read_inria_image(fname)
         mask = predict(model, image, image_size=(512, 512), batch_size=args.batch_size)
-        mask = ((mask > 0.5) * 255).astype(np.uint8)
-        name = os.path.join(predictions_dir, os.path.basename(fname))
+        mask = ((mask > threshold) * 255).astype(np.uint8)
+        name = os.path.join(test_predictions_dir, os.path.basename(fname))
         cv2.imwrite(name, mask)
+
+        name_compressed = os.path.join(test_predictions_dir_compressed, os.path.basename(fname))
+        command = (
+            "gdal_translate --config GDAL_PAM_ENABLED NO -co COMPRESS=CCITTFAX4 -co NBITS=1 "
+            + name
+            + " "
+            + name_compressed
+        )
+        subprocess.call(command, shell=True)
 
 
 if __name__ == "__main__":

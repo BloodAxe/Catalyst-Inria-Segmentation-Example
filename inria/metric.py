@@ -98,7 +98,7 @@ class OptimalThreshold(Callback):
         self.output_key = output_key
         self.input_key = input_key
         self.image_id_key = image_id_key
-        self.thresholds = np.arange(-2, 2, 0.01)
+        self.thresholds = np.arange(0, 1, 0.01)
         self.scores_per_image = defaultdict(
             lambda: {"intersection": np.zeros_like(self.thresholds), "union": np.zeros_like(self.thresholds)}
         )
@@ -110,7 +110,7 @@ class OptimalThreshold(Callback):
 
     def on_batch_end(self, state: RunnerState):
         image_id = state.input[self.image_id_key]
-        outputs = state.output[self.output_key].detach()
+        outputs = state.output[self.output_key].detach().sigmoid()
         targets = state.input[self.input_key].detach()
 
         # Flatten images for easy computing IoU
@@ -147,8 +147,8 @@ class OptimalThreshold(Callback):
         iou_at_threshold = iou[threshold_index]
         threshold_value = self.thresholds[threshold_index]
 
-        state.metrics.epoch_values[state.loader_name][self.prefix] = float(threshold_value)
-        state.metrics.epoch_values[state.loader_name][self.prefix + "/" + "iou"] = float(iou_at_threshold)
+        state.metrics.epoch_values[state.loader_name][self.prefix + "/" + "threshold" ] = float(threshold_value)
+        state.metrics.epoch_values[state.loader_name][self.prefix] = float(iou_at_threshold)
 
         logger = get_tensorboard_logger(state)
-        logger.add_histogram(self.prefix + "/" + "iou", iou, global_step=state.epoch)
+        logger.add_histogram(self.prefix, iou, global_step=state.epoch)
