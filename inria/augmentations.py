@@ -56,15 +56,15 @@ def medium_augmentations():
     return A.Compose(
         [
             A.HorizontalFlip(),
-            A.ShiftScaleRotate(scale_limit=0.05, rotate_limit=15, border_mode=cv2.BORDER_CONSTANT),
+            A.ShiftScaleRotate(scale_limit=0.1, rotate_limit=15, border_mode=cv2.BORDER_CONSTANT),
             # Add occasion blur/sharpening
-            A.OneOf([A.GaussianBlur(), A.MotionBlur(), A.IAASharpen()]),
+            A.OneOf([A.GaussianBlur(), A.IAASharpen(), A.NoOp()]),
             # Spatial-preserving augmentations:
-            A.OneOf([A.CoarseDropout(), A.MaskDropout(max_objects=3), A.NoOp()]),
+            A.OneOf([A.CoarseDropout(), A.MaskDropout(max_objects=5), A.NoOp()]),
             A.GaussNoise(),
             A.OneOf([A.RandomBrightnessContrast(), A.CLAHE(), A.HueSaturationValue(), A.RGBShift(), A.RandomGamma()]),
             # Weather effects
-            A.OneOf([A.RandomFog(fog_coef_lower=0.01, fog_coef_upper=0.3, p=0.1), A.NoOp()]),
+            A.RandomFog(fog_coef_lower=0.01, fog_coef_upper=0.3, p=0.1),
             A.Normalize(),
         ]
     )
@@ -73,12 +73,13 @@ def medium_augmentations():
 def hard_augmentations():
     return A.Compose(
         [
-            A.HorizontalFlip(),
+            A.RandomRotate90(),
+            A.Transpose(),
             A.RandomGridShuffle(),
             A.ShiftScaleRotate(
-                scale_limit=0.05, rotate_limit=45, border_mode=cv2.BORDER_CONSTANT, mask_value=0, value=0
+                scale_limit=0.1, rotate_limit=45, border_mode=cv2.BORDER_CONSTANT, mask_value=0, value=0
             ),
-            A.ElasticTransform(border_mode=cv2.BORDER_CONSTANT, mask_value=0, value=0),
+            A.ElasticTransform(border_mode=cv2.BORDER_CONSTANT, alpha_affine=5, mask_value=0, value=0),
             # Add occasion blur
             A.OneOf([A.GaussianBlur(), A.GaussNoise(), A.IAAAdditiveGaussianNoise(), A.NoOp()]),
             # D4 Augmentations
