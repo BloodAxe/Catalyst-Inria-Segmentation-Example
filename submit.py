@@ -4,7 +4,7 @@ import cv2
 import numpy as np
 import torch
 from catalyst.utils import load_checkpoint, unpack_checkpoint
-from pytorch_toolbelt.inference.tta import TTAWrapper, d4_image2mask, fliplr_image2mask
+from pytorch_toolbelt.inference.tta import TTAWrapper, d4_image2mask, fliplr_image2mask, MultiscaleTTAWrapper
 from torch import nn
 
 from tqdm import tqdm
@@ -64,6 +64,10 @@ def main():
     if args.tta == "fliplr":
         model = TTAWrapper(model, fliplr_image2mask)
 
+    if args.tta == "flipscale":
+        model = TTAWrapper(model, fliplr_image2mask)
+        model = MultiscaleTTAWrapper(model, size_offsets=[-128, -64, 64, 128])
+
     if args.tta == "d4":
         model = TTAWrapper(model, d4_image2mask)
 
@@ -78,14 +82,18 @@ def main():
     name = os.path.join(run_dir, "sample_color.jpg")
     cv2.imwrite(name, mask)
 
-    os.makedirs(os.path.join(out_dir, "test_predictions"), exist_ok=True)
-    
+    predictions_dir = os.path.join(out_dir, f"test_predictions")
+    if args.tta is not None:
+        predictions_dir += f"_{args.tta}"
+
+    os.makedirs(predictions_dir, exist_ok=True)
+
     test_images = find_in_dir(os.path.join(data_dir, "test", "images"))
     for fname in tqdm(test_images, total=len(test_images)):
         image = read_inria_image(fname)
         mask = predict(model, image, image_size=(512, 512), batch_size=args.batch_size)
         mask = ((mask > 0.5) * 255).astype(np.uint8)
-        name = os.path.join(out_dir, "test_predictions", os.path.basename(fname))
+        name = os.path.join(predictions_dir, os.path.basename(fname))
         cv2.imwrite(name, mask)
 
 
