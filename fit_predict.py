@@ -16,13 +16,16 @@ from catalyst.dl.callbacks import CriterionAggregatorCallback
 from catalyst.utils import load_checkpoint, unpack_checkpoint
 from pytorch_toolbelt.optimization.functional import get_lr_decay_parameters
 from pytorch_toolbelt.utils import fs
-from pytorch_toolbelt.utils.catalyst import ShowPolarBatchesCallback, PixelAccuracyCallback, \
-    draw_binary_segmentation_predictions
+from pytorch_toolbelt.utils.catalyst import (
+    ShowPolarBatchesCallback,
+    PixelAccuracyCallback,
+    draw_binary_segmentation_predictions,
+)
 from pytorch_toolbelt.utils.random import set_manual_seed
 from pytorch_toolbelt.utils.torch_utils import count_parameters, transfer_weights, get_optimizable_parameters
 from torch import nn
 from torch.optim.lr_scheduler import CyclicLR
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, WeightedRandomSampler
 
 from inria.dataset import (
     read_inria_image,
@@ -36,7 +39,9 @@ from inria.dataset import (
     OUTPUT_MASK_4_KEY,
     OUTPUT_MASK_16_KEY,
     OUTPUT_MASK_32_KEY,
-    INPUT_IMAGE_ID_KEY)
+    INPUT_IMAGE_ID_KEY,
+    get_xview2_extra_dataset,
+)
 from inria.factory import predict
 from inria.losses import get_loss, AdaptiveMaskLoss2d
 from inria.metric import JaccardMetricPerImage, OptimalThreshold
@@ -55,6 +60,9 @@ def main():
     parser.add_argument("--fast", action="store_true")
     parser.add_argument(
         "-dd", "--data-dir", type=str, required=True, help="Data directory for INRIA sattelite dataset"
+    )
+    parser.add_argument(
+        "-dd-xview2", "--data-dir-xview2", type=str, required=False, help="Data directory for external xView2 dataset"
     )
     parser.add_argument("-m", "--model", type=str, default="resnet34_fpncat128", help="")
     parser.add_argument("-b", "--batch-size", type=int, default=8, help="Batch Size during training, e.g. -b 64")
@@ -112,6 +120,7 @@ def main():
     use_dsv = args.dsv
     accumulation_steps = args.accumulation_steps
     weight_decay = args.weight_decay
+    extra_data_xview2 = args.data_dir_xview2
 
     run_train = num_epochs > 0
 
@@ -157,7 +166,7 @@ def main():
     default_callbacks = [
         PixelAccuracyCallback(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY),
         JaccardMetricPerImage(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY, prefix="jaccard"),
-        OptimalThreshold(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY, prefix="optimized_jaccard")
+        OptimalThreshold(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY, prefix="optimized_jaccard"),
     ]
 
     if show:
@@ -173,6 +182,18 @@ def main():
     train_ds, valid_ds, train_sampler = get_datasets(
         data_dir=data_dir, image_size=image_size, augmentation=augmentations, train_mode=train_mode, fast=fast
     )
+
+    if extra_data_xview2 is not None:
+        extra_train_ds, sampler = get_xview2_extra_dataset(
+            extra_data_xview2, image_size=image_size, augmentation=augmentations
+        )
+
+        train_ds = train_ds + extra_train_ds
+        if train_sampler is not None:
+            weights = torch.cat([train_sampler.weights, sampler.weights], dim=0)
+            train_sampler = WeightedRandomSampler(weights, train_sampler.num_samples + sampler.num_samples)
+
+        print("Using extra data from xView2 with", len(extra_data_xview2), "samples")
 
     # Pretrain/warmup
     if warmup:

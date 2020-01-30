@@ -1,11 +1,12 @@
 import math
 import os
-from typing import List, Callable, Optional
+from typing import List, Callable, Optional, Tuple
 
 import albumentations as A
 import cv2
 import numpy as np
 import pandas as pd
+import torch
 from pytorch_toolbelt.inference.tiles import ImageSlicer
 from pytorch_toolbelt.utils import fs
 from pytorch_toolbelt.utils.catalyst import PseudolabelDatasetMixin
@@ -235,7 +236,7 @@ def get_datasets(
     use_edges=False,
     sanity_check=False,
     fast=False,
-):
+) -> Tuple[Dataset, Dataset, Optional[WeightedRandomSampler]]:
     """
     Create train and validation data loaders
     :param data_dir: Inria dataset directory
@@ -266,12 +267,7 @@ def get_datasets(
 
     if train_mode == "random":
 
-        # Empirical weights for regions (for oversampling hard regions)
-        # locations_weights = [1, 2, 3, 1, 1]
-        locations_weights = [1, 1, 1, 1, 1]
-
         train_data = []
-        train_data_weights = []
         valid_data = []
 
         # For validation, we remove the first five images of every location (e.g., austin{1-5}.tif, chicago{1-5}.tif) from the training set.
@@ -279,17 +275,15 @@ def get_datasets(
 
         if fast:
             # Fast training model. Use only one image per location for training and one image per location for validation
-            for loc, weight in zip(locations, locations_weights):
+            for loc in locations:
                 valid_data.append(f"{loc}1")
                 train_data.append(f"{loc}6")
-                train_data_weights.append(weight)
         else:
-            for loc, weight in zip(locations, locations_weights):
+            for loc in locations:
                 for i in range(1, 6):
                     valid_data.append(f"{loc}{i}")
                 for i in range(6, 37):
                     train_data.append(f"{loc}{i}")
-                    train_data_weights.append(weight)
 
         train_img = [os.path.join(data_dir, "train", "images", f"{fname}.tif") for fname in train_data]
         valid_img = [os.path.join(data_dir, "train", "images", f"{fname}.tif") for fname in valid_data]
@@ -300,8 +294,10 @@ def get_datasets(
         train_transform = A.Compose([crop_transform(image_size), train_transform])
 
         trainset = InriaImageMaskDataset(train_img, train_mask, use_edges=use_edges, transform=train_transform)
+
         num_train_samples = int(len(trainset) * (5000 * 5000) / (image_size[0] * image_size[1]))
-        train_sampler = WeightedRandomSampler(np.array(train_data_weights), num_train_samples)
+        crops_in_image = (5000 * 5000) / (image_size[0] * image_size[1])
+        train_sampler = WeightedRandomSampler(torch.ones(num_train_samples) * crops_in_image, num_train_samples)
 
         validset = InrialTiledImageMaskDataset(
             valid_img,
@@ -337,7 +333,6 @@ def get_datasets(
         valid_img = [os.path.join(data_dir, "train", "images", f"{fname}.tif") for fname in valid_data]
         valid_mask = [os.path.join(data_dir, "train", "gt", f"{fname}.tif") for fname in valid_data]
 
-
         validset = InrialTiledImageMaskDataset(
             valid_img,
             valid_mask,
@@ -360,6 +355,65 @@ def get_datasets(
     return trainset, validset, train_sampler
 
 
+def get_xview2_extra_dataset(
+    data_dir: str, image_size=(224, 224), augmentation="hard", use_edges=False, fast=False
+) -> Tuple[Dataset, WeightedRandomSampler]:
+    """
+    Create additional train dataset using xView2 dataset
+    :param data_dir: xView2 dataset directory
+    :param fast: Fast training model. Use only one image per location for training and one image per location for validation
+    :param image_size: Size of image crops during training & validation
+    :param use_edges: If True, adds 'edge' target mask
+    :param augmentation: Type of image augmentations to use
+    :param train_mode:
+    'random' - crops tiles from source images randomly.
+    'tiles' - crop image in overlapping tiles (guaranteed to process entire dataset)
+    :return: (train_loader, valid_loader)
+    """
+
+    if augmentation == "hard":
+        train_transform = hard_augmentations()
+    elif augmentation == "medium":
+        train_transform = medium_augmentations()
+    elif augmentation == "light":
+        train_transform = light_augmentations()
+    elif augmentation == "safe":
+        train_transform = safe_augmentations()
+    else:
+        train_transform = A.Normalize()
+
+    def is_pre_image(fname):
+        return "_pre_" in fname
+
+    train1_img = list(filter(is_pre_image, fs.find_images_in_dir(os.path.join(data_dir, "train", "images"))))
+    train1_msk = list(filter(is_pre_image, fs.find_images_in_dir(os.path.join(data_dir, "train", "masks"))))
+
+    train2_img = list(filter(is_pre_image, fs.find_images_in_dir(os.path.join(data_dir, "tier3", "images"))))
+    train2_msk = list(filter(is_pre_image, fs.find_images_in_dir(os.path.join(data_dir, "tier3", "masks"))))
+
+    if fast:
+        train1_img = train1_img[:128]
+        train1_msk = train1_msk[:128]
+
+        train2_img = train2_img[:128]
+        train2_msk = train2_msk[:128]
+
+    train_transform = A.Compose([crop_transform(image_size), train_transform])
+
+    trainset = InriaImageMaskDataset(
+        image_filenames=train1_img + train2_img,
+        mask_filenames=train1_msk + train2_msk,
+        use_edges=use_edges,
+        transform=train_transform,
+    )
+
+    num_train_samples = int(len(trainset) * (1024 * 1024) / (image_size[0] * image_size[1]))
+    crops_in_image = (1024 * 1024) / (image_size[0] * image_size[1])
+    train_sampler = WeightedRandomSampler(torch.ones(num_train_samples) * crops_in_image, num_train_samples)
+
+    return trainset, train_sampler
+
+
 def get_pseudolabeling_dataset(data_dir: str, include_masks: bool, image_size=(224, 224), augmentation=None):
     images = fs.find_images_in_dir(os.path.join(data_dir, "test_tiles", "images"))
 
@@ -367,8 +421,6 @@ def get_pseudolabeling_dataset(data_dir: str, include_masks: bool, image_size=(2
     os.makedirs(masks_dir, exist_ok=True)
 
     masks = [os.path.join(masks_dir, fs.id_from_fname(image_fname) + ".png") for image_fname in images]
-
-    is_whole_image_input = False
 
     if augmentation == "hard":
         transfrom = hard_augmentations()
