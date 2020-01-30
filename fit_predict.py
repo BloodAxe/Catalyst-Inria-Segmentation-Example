@@ -188,12 +188,12 @@ def main():
             extra_data_xview2, image_size=image_size, augmentation=augmentations
         )
 
-        train_ds = train_ds + extra_train_ds
         if train_sampler is not None:
             weights = torch.cat([train_sampler.weights, sampler.weights], dim=0)
             train_sampler = WeightedRandomSampler(weights, train_sampler.num_samples + sampler.num_samples)
 
-        print("Using extra data from xView2 with", len(extra_data_xview2), "samples")
+        train_ds = train_ds + extra_train_ds
+        print("Using extra data from xView2 with", len(extra_train_ds), "samples")
 
     # Pretrain/warmup
     if warmup:
