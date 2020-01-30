@@ -39,6 +39,6 @@ def get_scheduler(scheduler_name: str, optimizer, lr, num_epochs, batches_in_epo
         )
 
     if scheduler_name.lower() == "simple":
-        return MultiStepLR(optimizer, milestones=[int(num_epochs * 0.4), int(num_epochs * 0.7)], gamma=0.2)
+        return MultiStepLR(optimizer, milestones=[int(num_epochs * 0.4), int(num_epochs * 0.7)], gamma=0.1)
 
     raise KeyError(scheduler_name)
