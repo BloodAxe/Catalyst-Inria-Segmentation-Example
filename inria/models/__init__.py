@@ -22,6 +22,7 @@ def get_model(model_name: str, dropout=0.0, pretrained=True) -> nn.Module:
         "hrnet18_unet64": unet.hrnet18_unet64,
         "hrnet34_unet64": unet.hrnet34_unet64,
         "hrnet48_unet64": unet.hrnet48_unet64,
+        "densenet121_unet64": unet.densenet121_unet64,
 
         # Deeplab
         "resnet34_deeplab128": deeplab.resnet34_deeplab128,
