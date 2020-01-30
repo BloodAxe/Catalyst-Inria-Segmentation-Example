@@ -383,7 +383,7 @@ def main():
         # Training is finished. Let's run predictions using best checkpoint weights
         best_checkpoint = os.path.join(log_dir, "main", "checkpoints", "best.pth")
 
-        model_checkpoint = os.path.join(log_dir, "warmup", "checkpoints", f"{checkpoint_prefix}.pth")
+        model_checkpoint = os.path.join(log_dir, "main", "checkpoints", f"{checkpoint_prefix}.pth")
         clean_checkpoint(best_checkpoint, model_checkpoint)
 
         unpack_checkpoint(torch.load(model_checkpoint), model=model)
@@ -395,9 +395,8 @@ def main():
             image_size=image_size,
             target_key=OUTPUT_MASK_KEY,
             batch_size=args.batch_size,
-            activation="sigmoid",
         )
-        mask = ((mask > 0.5) * 255).astype(np.uint8)
+        mask = ((mask > 0) * 255).astype(np.uint8)
         name = os.path.join(log_dir, "sample_color.jpg")
         cv2.imwrite(name, mask)
 
