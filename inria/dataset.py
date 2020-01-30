@@ -13,6 +13,7 @@ from pytorch_toolbelt.utils.catalyst import PseudolabelDatasetMixin
 from pytorch_toolbelt.utils.torch_utils import tensor_from_rgb_image, tensor_from_mask_image
 from scipy.ndimage import binary_dilation, binary_fill_holes
 from torch.utils.data import WeightedRandomSampler, Dataset, ConcatDataset
+from PIL import Image
 
 from .augmentations import *
 
@@ -62,6 +63,12 @@ def read_inria_mask_with_pseudolabel(fname):
     mask[mask > UNLABELED_SAMPLE] = 1
     return mask
 
+
+def read_xview_mask(fname):
+    mask = np.array(Image.open(fname))  # Read using PIL since it supports palletted image
+    if len(mask.shape) == 3:
+        mask = np.squeeze(mask, axis=-1)
+    return mask
 
 def compute_boundary_mask(mask: np.ndarray) -> np.ndarray:
     dilated = binary_dilation(mask, structure=np.ones((5, 5), dtype=np.bool))
@@ -297,7 +304,7 @@ def get_datasets(
 
         num_train_samples = int(len(trainset) * (5000 * 5000) / (image_size[0] * image_size[1]))
         crops_in_image = (5000 * 5000) / (image_size[0] * image_size[1])
-        train_sampler = WeightedRandomSampler(torch.ones(num_train_samples) * crops_in_image, num_train_samples)
+        train_sampler = WeightedRandomSampler(torch.ones(len(trainset)) * crops_in_image, num_train_samples)
 
         validset = InrialTiledImageMaskDataset(
             valid_img,
@@ -385,6 +392,8 @@ def get_xview2_extra_dataset(
     def is_pre_image(fname):
         return "_pre_" in fname
 
+
+
     train1_img = list(filter(is_pre_image, fs.find_images_in_dir(os.path.join(data_dir, "train", "images"))))
     train1_msk = list(filter(is_pre_image, fs.find_images_in_dir(os.path.join(data_dir, "train", "masks"))))
 
@@ -405,11 +414,12 @@ def get_xview2_extra_dataset(
         mask_filenames=train1_msk + train2_msk,
         use_edges=use_edges,
         transform=train_transform,
+        mask_loader=read_xview_mask
     )
 
     num_train_samples = int(len(trainset) * (1024 * 1024) / (image_size[0] * image_size[1]))
     crops_in_image = (1024 * 1024) / (image_size[0] * image_size[1])
-    train_sampler = WeightedRandomSampler(torch.ones(num_train_samples) * crops_in_image, num_train_samples)
+    train_sampler = WeightedRandomSampler(torch.ones(len(trainset)) * crops_in_image, num_train_samples)
 
     return trainset, train_sampler
 
