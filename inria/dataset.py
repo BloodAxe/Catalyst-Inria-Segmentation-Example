@@ -359,7 +359,7 @@ def get_datasets(
         first_batch = [trainset[i] for i in range(32)]
         return first_batch * 50, first_batch, None
 
-    return trainset, validset, train_sampler
+    return trainset, validset, None if fast else train_sampler
 
 
 def get_xview2_extra_dataset(
@@ -421,7 +421,7 @@ def get_xview2_extra_dataset(
     crops_in_image = (1024 * 1024) / (image_size[0] * image_size[1])
     train_sampler = WeightedRandomSampler(torch.ones(len(trainset)) * crops_in_image, num_train_samples)
 
-    return trainset, train_sampler
+    return trainset, None if fast else train_sampler
 
 
 def get_pseudolabeling_dataset(data_dir: str, include_masks: bool, image_size=(224, 224), augmentation=None):

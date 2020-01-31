@@ -157,6 +157,9 @@ def main():
     if online_pseudolabeling:
         checkpoint_prefix += "_opl"
 
+    if extra_data_xview2:
+        checkpoint_prefix += "_with_xview2"
+
     if experiment is not None:
         checkpoint_prefix = experiment
 
@@ -185,7 +188,7 @@ def main():
 
     if extra_data_xview2 is not None:
         extra_train_ds, sampler = get_xview2_extra_dataset(
-            extra_data_xview2, image_size=image_size, augmentation=augmentations
+            extra_data_xview2, image_size=image_size, augmentation=augmentations, fast=fast
         )
 
         if train_sampler is not None:
@@ -412,7 +415,7 @@ def main():
         mask = predict(
             model,
             read_inria_image("sample_color.jpg"),
-            tta=args.tta,
+            tta=None,
             image_size=image_size,
             target_key=OUTPUT_MASK_KEY,
             batch_size=args.batch_size,
