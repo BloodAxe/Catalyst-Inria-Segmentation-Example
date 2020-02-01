@@ -76,8 +76,9 @@ def compute_weight_mask(mask: np.ndarray, edge_weight=4) -> np.ndarray:
     dilated = binary_dilation(binary_mask, structure=np.ones((5, 5), dtype=np.bool))
     eroded = binary_erosion(binary_mask, structure=np.ones((5, 5), dtype=np.bool))
 
-    a = np.logical_xor(binary_mask, dilated) & ~binary_mask
-    b = np.logical_xor(binary_mask, eroded) & ~binary_mask
+    a = dilated & ~binary_mask
+    b = binary_mask & ~eroded
+
     weight_mask = (a | b).astype(np.float32) * edge_weight + 1
     weight_mask = cv2.GaussianBlur(weight_mask, ksize=(5, 5), sigmaX=5)
     return weight_mask
