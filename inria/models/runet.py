@@ -58,7 +58,7 @@ class RUnetDecoderBlock(nn.Module):
         super().__init__()
         self.layer = nn.Sequential(
             nn.Upsample(scale_factor=2),
-            nn.Conv2d(in_channels, out_channels, 3, padding=1),
+            nn.Conv2d(in_channels, out_channels, 3, padding=1, bias=False),
             nn.BatchNorm2d(out_channels),
             nn.ReLU(inplace=True),
         )
