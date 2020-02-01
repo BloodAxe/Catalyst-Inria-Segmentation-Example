@@ -70,6 +70,7 @@ def read_xview_mask(fname):
         mask = np.squeeze(mask, axis=-1)
     return mask
 
+
 def compute_boundary_mask(mask: np.ndarray) -> np.ndarray:
     dilated = binary_dilation(mask, structure=np.ones((5, 5), dtype=np.bool))
     dilated = binary_fill_holes(dilated)
@@ -243,6 +244,7 @@ def get_datasets(
     use_edges=False,
     sanity_check=False,
     fast=False,
+    buildings_only=True,
 ) -> Tuple[Dataset, Dataset, Optional[WeightedRandomSampler]]:
     """
     Create train and validation data loaders
@@ -320,6 +322,9 @@ def get_datasets(
     elif train_mode == "tiles":
         inria_tiles = pd.read_csv(os.path.join(data_dir, "inria_tiles.csv"))
 
+        if buildings_only:
+            inria_tiles = inria_tiles[inria_tiles["has_buildings"]]
+
         train_img = inria_tiles[inria_tiles["train"] == 1]["image"].tolist()
         train_mask = inria_tiles[inria_tiles["train"] == 1]["mask"].tolist()
 
@@ -330,6 +335,7 @@ def get_datasets(
             train_img = train_img[:128]
             train_mask = train_mask[:128]
 
+        train_transform = A.Compose([crop_transform(image_size, input_size=768), train_transform])
         trainset = InriaImageMaskDataset(train_img, train_mask, use_edges=use_edges, transform=train_transform)
 
         valid_data = []
@@ -392,8 +398,6 @@ def get_xview2_extra_dataset(
     def is_pre_image(fname):
         return "_pre_" in fname
 
-
-
     train1_img = list(filter(is_pre_image, fs.find_images_in_dir(os.path.join(data_dir, "train", "images"))))
     train1_msk = list(filter(is_pre_image, fs.find_images_in_dir(os.path.join(data_dir, "train", "masks"))))
 
@@ -407,14 +411,14 @@ def get_xview2_extra_dataset(
         train2_img = train2_img[:128]
         train2_msk = train2_msk[:128]
 
-    train_transform = A.Compose([crop_transform(image_size), train_transform])
+    train_transform = A.Compose([crop_transform(image_size, input_size=1024), train_transform])
 
     trainset = InriaImageMaskDataset(
         image_filenames=train1_img + train2_img,
         mask_filenames=train1_msk + train2_msk,
         use_edges=use_edges,
         transform=train_transform,
-        mask_loader=read_xview_mask
+        mask_loader=read_xview_mask,
     )
 
     num_train_samples = int(len(trainset) * (1024 * 1024) / (image_size[0] * image_size[1]))

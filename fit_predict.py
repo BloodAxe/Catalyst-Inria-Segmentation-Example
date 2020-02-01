@@ -415,7 +415,6 @@ def main():
         mask = predict(
             model,
             read_inria_image("sample_color.jpg"),
-            tta=None,
             image_size=image_size,
             target_key=OUTPUT_MASK_KEY,
             batch_size=args.batch_size,
