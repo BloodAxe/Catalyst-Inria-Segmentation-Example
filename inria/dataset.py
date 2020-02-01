@@ -135,7 +135,7 @@ class InriaImageMaskDataset(Dataset, PseudolabelDatasetMixin):
         }
 
         if self.need_weight_mask:
-            sample[INPUT_MASK_WEIGHT_KEY] = (tensor_from_mask_image(compute_weight_mask(data["mask"])).float(),)
+            sample[INPUT_MASK_WEIGHT_KEY] = tensor_from_mask_image(compute_weight_mask(data["mask"])).float()
 
         return sample
 
@@ -208,7 +208,7 @@ class _InrialTiledImageMaskDataset(Dataset):
         }
 
         if self.need_weight_mask:
-            data[INPUT_MASK_WEIGHT_KEY] = (tensor_from_mask_image(compute_weight_mask(data["mask"])).float(),)
+            data[INPUT_MASK_WEIGHT_KEY] = tensor_from_mask_image(compute_weight_mask(data["mask"])).float()
 
         return data
 

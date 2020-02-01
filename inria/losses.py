@@ -8,6 +8,8 @@ __all__ = ["get_loss", "AdaptiveMaskLoss2d"]
 
 from torch import nn
 
+from inria.dataset import INPUT_MASK_KEY, INPUT_MASK_WEIGHT_KEY
+
 
 class AdaptiveMaskLoss2d(nn.Module):
     """
@@ -61,7 +63,9 @@ def get_loss(loss_name: str, ignore_index=None):
         return BCELoss(ignore_index=ignore_index)
 
     if loss_name.lower() == "wbce":
-        return WeightedBCEWithLogits(ignore_index=ignore_index)
+        return WeightedBCEWithLogits(
+            mask_key=INPUT_MASK_KEY, weight_key=INPUT_MASK_WEIGHT_KEY, ignore_index=ignore_index
+        )
 
     if loss_name.lower() == "soft_bce":
         return SoftBCELoss(smooth_factor=0.1, ignore_index=ignore_index)
