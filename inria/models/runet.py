@@ -14,20 +14,31 @@ from ..dataset import OUTPUT_MASK_KEY
 __all__ = ["seresnext50_runet64", "hrnet18_runet64", "hrnet34_runet64", "hrnet48_runet64", "densenet121_runet64"]
 
 
-def conv_bn_relu(in_channels, out_channels):
-    return nn.Sequential(
-        nn.Conv2d(in_channels, out_channels, 3, padding=1, bias=False),
-        nn.BatchNorm2d(out_channels),
-        nn.ReLU(inplace=True),
-    )
+class ResidualDoubleConvRelu(nn.Module):
+    def __init__(self, in_channels, out_channels):
+        super().__init__()
+
+        self.residual_path = (
+            nn.Conv2d(in_channels, out_channels, kernel_size=1) if in_channels != out_channels else nn.Identity()
+        )
+
+        self.main_path = nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, 3, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(inplace=True),
+            nn.Conv2d(out_channels, out_channels, 3, padding=1, bias=False),
+            nn.BatchNorm2d(out_channels),
+        )
+
+    def forward(self, x):
+        skip = self.residual_path(x)
+        x = self.main_path(x)
+        return F.relu(skip + x, inplace=True)
 
 
 class RUnetBottleneckBlock(nn.Module):
-    def __init__(self, in_channels, out_channels, block=conv_bn_relu, num_blocks=1):
+    def __init__(self, in_channels, out_channels, block=ResidualDoubleConvRelu, num_blocks=1):
         super().__init__()
-        self.residual = (
-            nn.Conv2d(in_channels, out_channels, kernel_size=1) if in_channels != out_channels else nn.Identity()
-        )
 
         blocks = []
         for i in range(num_blocks):
@@ -38,10 +49,8 @@ class RUnetBottleneckBlock(nn.Module):
 
     def forward(self, dec, enc):
         x = torch.cat([dec, enc], dim=1)
-        residual = self.residual(x)
-
         x = self.blocks(x)
-        return x + residual
+        return x
 
 
 class RUnetDecoderBlock(nn.Module):
@@ -63,6 +72,7 @@ class RUNetDecoderV2(DecoderModule):
         self,
         feature_maps: List[int],
         decoder_features: List[int],
+        runet_blocks: List[int],
         mask_channels: int,
         last_upsample_filters=None,
         dropout=0.0,
@@ -82,7 +92,7 @@ class RUNetDecoderV2(DecoderModule):
 
         self.bottlenecks = nn.ModuleList(
             [
-                RUnetBottleneckBlock(self.encoder_features[-i - 2] + f, f, num_blocks=i + 1)
+                RUnetBottleneckBlock(self.encoder_features[-i - 2] + f, f, num_blocks=runet_blocks[i])
                 for i, f in enumerate(reversed(self.decoder_features[:]))
             ]
         )
@@ -125,6 +135,7 @@ class RUnetV2SegmentationModel(nn.Module):
         encoder: EncoderModule,
         num_classes: int,
         unet_channels: Union[int, List[int]],
+        runet_blocks: List[int] = (1, 1, 1, 1),
         last_upsample_filters=None,
         dropout=0.25,
         abn_block: Union[ABN, Callable[[int], nn.Module]] = ABN,
@@ -136,6 +147,7 @@ class RUnetV2SegmentationModel(nn.Module):
         self.decoder = RUNetDecoderV2(
             feature_maps=encoder.output_filters,
             decoder_features=unet_channels,
+            runet_blocks=runet_blocks,
             last_upsample_filters=last_upsample_filters,
             mask_channels=num_classes,
             dropout=dropout,
@@ -166,6 +178,7 @@ def seresnext50_runet64(input_channels=3, num_classes=1, dropout=0.0, pretrained
         encoder,
         num_classes=num_classes,
         unet_channels=[64, 128, 256, 256],
+        runet_blocks=[3, 3, 3, 3],
         dropout=dropout,
         abn_block=partial(ABN, activation=ACT_RELU),
     )
@@ -180,6 +193,7 @@ def hrnet18_runet64(input_channels=3, num_classes=1, dropout=0.0, pretrained=Tru
         encoder,
         num_classes=num_classes,
         unet_channels=[64, 128, 256],
+        runet_blocks=[3, 3, 3, 3],
         dropout=dropout,
         abn_block=partial(ABN, activation=ACT_RELU),
     )
@@ -194,6 +208,7 @@ def hrnet34_runet64(input_channels=3, num_classes=1, dropout=0.0, pretrained=Tru
         encoder,
         num_classes=num_classes,
         unet_channels=[128, 128, 256],
+        runet_blocks=[3, 3, 3, 3],
         last_upsample_filters=64,
         dropout=dropout,
         abn_block=partial(ABN, activation=ACT_RELU),
@@ -209,6 +224,7 @@ def hrnet48_runet64(input_channels=3, num_classes=1, dropout=0.0, pretrained=Tru
         encoder,
         num_classes=num_classes,
         unet_channels=[128, 128, 256],
+        runet_blocks=[3, 3, 3, 3],
         last_upsample_filters=64,
         dropout=dropout,
         abn_block=partial(ABN, activation=ACT_RELU),
@@ -224,6 +240,7 @@ def densenet121_runet64(input_channels=3, num_classes=1, dropout=0.0, pretrained
         encoder,
         num_classes=num_classes,
         unet_channels=[128, 128, 256],
+        runet_blocks=[3, 3, 3, 3],
         last_upsample_filters=64,
         dropout=dropout,
         abn_block=partial(ABN, activation=ACT_RELU),
