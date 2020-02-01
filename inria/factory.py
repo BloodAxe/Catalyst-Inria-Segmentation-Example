@@ -6,14 +6,10 @@ import cv2
 import numpy as np
 import torch
 from pytorch_toolbelt.inference.tiles import CudaTileMerger, ImageSlicer
-from pytorch_toolbelt.inference.tta import TTAWrapper, fliplr_image2mask, d4_image2mask
-from pytorch_toolbelt.utils.torch_utils import tensor_from_rgb_image, to_numpy, rgb_image_from_tensor
+from pytorch_toolbelt.utils.torch_utils import tensor_from_rgb_image, to_numpy
 from torch import nn
-from torch.nn import functional as F
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
-
-from inria.dataset import INPUT_IMAGE_KEY, INPUT_MASK_KEY, INPUT_IMAGE_ID_KEY, OUTPUT_MASK_KEY
 
 
 class InMemoryDataset(Dataset):

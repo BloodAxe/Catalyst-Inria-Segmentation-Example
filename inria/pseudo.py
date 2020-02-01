@@ -1,7 +1,7 @@
+import numpy as np
 from catalyst.dl import Callback, CallbackOrder, RunnerState
 from pytorch_toolbelt.utils.catalyst import PseudolabelDatasetMixin
 from pytorch_toolbelt.utils.torch_utils import to_numpy
-import numpy as np
 
 
 class BCEOnlinePseudolabelingCallback2d(Callback):

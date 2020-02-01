@@ -41,6 +41,7 @@ from inria.dataset import (
     OUTPUT_MASK_32_KEY,
     INPUT_IMAGE_ID_KEY,
     get_xview2_extra_dataset,
+    INPUT_MASK_WEIGHT_KEY,
 )
 from inria.factory import predict
 from inria.losses import get_loss, AdaptiveMaskLoss2d
@@ -123,6 +124,7 @@ def main():
     extra_data_xview2 = args.data_dir_xview2
 
     run_train = num_epochs > 0
+    need_weight_mask = any(c[0] == "wbce" for c in criterions)
 
     model: nn.Module = get_model(model_name, dropout=dropout).cuda()
 
@@ -183,12 +185,21 @@ def main():
         default_callbacks += [ShowPolarBatchesCallback(visualize_inria_predictions, metric="accuracy", minimize=False)]
 
     train_ds, valid_ds, train_sampler = get_datasets(
-        data_dir=data_dir, image_size=image_size, augmentation=augmentations, train_mode=train_mode, fast=fast
+        data_dir=data_dir,
+        image_size=image_size,
+        augmentation=augmentations,
+        train_mode=train_mode,
+        fast=fast,
+        need_weight_mask=need_weight_mask,
     )
 
     if extra_data_xview2 is not None:
         extra_train_ds, sampler = get_xview2_extra_dataset(
-            extra_data_xview2, image_size=image_size, augmentation=augmentations, fast=fast
+            extra_data_xview2,
+            image_size=image_size,
+            augmentation=augmentations,
+            fast=fast,
+            need_weight_mask=need_weight_mask,
         )
 
         if train_sampler is not None:
@@ -208,7 +219,7 @@ def main():
         for loss_name, loss_weight in criterions:
             criterion_callback = CriterionCallback(
                 prefix="seg_loss/" + loss_name,
-                input_key=INPUT_MASK_KEY,
+                input_key=INPUT_MASK_KEY if loss_name != "wbce" else [INPUT_MASK_KEY, INPUT_MASK_WEIGHT_KEY],
                 output_key=OUTPUT_MASK_KEY,
                 criterion_key=loss_name,
                 multiplier=float(loss_weight),
@@ -323,7 +334,7 @@ def main():
         for loss_name, loss_weight in criterions:
             criterion_callback = CriterionCallback(
                 prefix="seg_loss/" + loss_name,
-                input_key=INPUT_MASK_KEY,
+                input_key=INPUT_MASK_KEY if loss_name != "wbce" else [INPUT_MASK_KEY, INPUT_MASK_WEIGHT_KEY],
                 output_key=OUTPUT_MASK_KEY,
                 criterion_key=loss_name,
                 multiplier=float(loss_weight),
@@ -386,6 +397,7 @@ def main():
         print("\tLearning rate  :", learning_rate)
         print("\tBatch size     :", batch_size)
         print("\tCriterion      :", criterions)
+        print("\tUse weight mask:", need_weight_mask)
 
         # model training
         runner.train(

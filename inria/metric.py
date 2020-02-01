@@ -1,4 +1,5 @@
 from collections import defaultdict
+
 import numpy as np
 import torch
 from catalyst.dl import Callback, RunnerState, CallbackOrder

@@ -1,4 +1,3 @@
-import torch
 from pytorch_toolbelt.inference.functional import pad_image_tensor, unpad_image_tensor
 from pytorch_toolbelt.modules import ABN
 from pytorch_toolbelt.modules import encoders as E

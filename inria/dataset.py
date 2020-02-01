@@ -1,4 +1,3 @@
-import math
 import os
 from typing import List, Callable, Optional, Tuple
 
@@ -7,19 +6,20 @@ import cv2
 import numpy as np
 import pandas as pd
 import torch
+from PIL import Image
 from pytorch_toolbelt.inference.tiles import ImageSlicer
 from pytorch_toolbelt.utils import fs
 from pytorch_toolbelt.utils.catalyst import PseudolabelDatasetMixin
 from pytorch_toolbelt.utils.torch_utils import tensor_from_rgb_image, tensor_from_mask_image
-from scipy.ndimage import binary_dilation, binary_fill_holes
+from scipy.ndimage import binary_dilation, binary_erosion
 from torch.utils.data import WeightedRandomSampler, Dataset, ConcatDataset
-from PIL import Image
 
 from .augmentations import *
 
 INPUT_IMAGE_KEY = "image"
 INPUT_IMAGE_ID_KEY = "image_id"
 INPUT_MASK_KEY = "mask"
+INPUT_MASK_WEIGHT_KEY = "weights"
 OUTPUT_MASK_KEY = "mask"
 INPUT_INDEX_KEY = "index"
 
@@ -71,14 +71,16 @@ def read_xview_mask(fname):
     return mask
 
 
-def compute_boundary_mask(mask: np.ndarray) -> np.ndarray:
-    dilated = binary_dilation(mask, structure=np.ones((5, 5), dtype=np.bool))
-    dilated = binary_fill_holes(dilated)
+def compute_weight_mask(mask: np.ndarray, edge_weight=4) -> np.ndarray:
+    binary_mask = mask > 0
+    dilated = binary_dilation(binary_mask, structure=np.ones((5, 5), dtype=np.bool))
+    eroded = binary_erosion(binary_mask, structure=np.ones((5, 5), dtype=np.bool))
 
-    diff = dilated & ~mask
-    diff = cv2.dilate(diff, kernel=(5, 5))
-    diff = diff & ~mask
-    return diff.astype(np.uint8)
+    a = np.logical_xor(binary_mask, dilated) & ~binary_mask
+    b = np.logical_xor(binary_mask, eroded) & ~binary_mask
+    weight_mask = (a | b).astype(np.float32) * edge_weight + 1
+    weight_mask = cv2.GaussianBlur(weight_mask, ksize=(5, 5), sigmaX=5)
+    return weight_mask
 
 
 class InriaImageMaskDataset(Dataset, PseudolabelDatasetMixin):
@@ -89,13 +91,13 @@ class InriaImageMaskDataset(Dataset, PseudolabelDatasetMixin):
         transform: A.Compose,
         image_loader=read_inria_image,
         mask_loader=read_inria_mask,
-        use_edges=False,
+        need_weight_mask=False,
     ):
         if mask_filenames is not None and len(image_filenames) != len(mask_filenames):
             raise ValueError("Number of images does not corresponds to number of targets")
 
         self.image_ids = [fs.id_from_fname(fname) for fname in image_filenames]
-        self.use_edges = use_edges
+        self.need_weight_mask = need_weight_mask
 
         self.images = image_filenames
         self.masks = mask_filenames
@@ -131,6 +133,9 @@ class InriaImageMaskDataset(Dataset, PseudolabelDatasetMixin):
             INPUT_MASK_KEY: tensor_from_mask_image(data["mask"]).float(),
         }
 
+        if self.need_weight_mask:
+            sample[INPUT_MASK_WEIGHT_KEY] = (tensor_from_mask_image(compute_weight_mask(data["mask"])).float(),)
+
         return sample
 
 
@@ -146,7 +151,7 @@ class _InrialTiledImageMaskDataset(Dataset):
         image_margin=0,
         transform=None,
         target_shape=None,
-        use_edges=False,
+        need_weight_mask=False,
         keep_in_mem=False,
     ):
         self.image_fname = image_fname
@@ -155,7 +160,7 @@ class _InrialTiledImageMaskDataset(Dataset):
         self.mask_loader = target_loader
         self.image = None
         self.mask = None
-        self.use_edges = use_edges
+        self.need_weight_mask = need_weight_mask
 
         if target_shape is None or keep_in_mem:
             image = image_loader(image_fname)
@@ -194,22 +199,15 @@ class _InrialTiledImageMaskDataset(Dataset):
         image = data["image"]
         mask = data["mask"]
 
-        # coarse_mask = cv2.resize(
-        #     mask,
-        #     dsize=(mask.shape[1] // 4, mask.shape[0] // 4),
-        #     interpolation=cv2.INTER_LINEAR,
-        # )
-
         data = {
             INPUT_IMAGE_KEY: tensor_from_rgb_image(image),
             INPUT_MASK_KEY: tensor_from_mask_image(mask).float(),
-            # "coarse_targets": tensor_from_mask_image(coarse_mask).float(),
             INPUT_IMAGE_ID_KEY: self.image_ids[index],
             "crop_coords": self.crop_coords_str[index],
         }
 
-        if self.use_edges:
-            data["edge"] = tensor_from_mask_image(compute_boundary_mask(mask)).float()
+        if self.need_weight_mask:
+            data[INPUT_MASK_WEIGHT_KEY] = (tensor_from_mask_image(compute_weight_mask(data["mask"])).float(),)
 
         return data
 
@@ -221,7 +219,7 @@ class InrialTiledImageMaskDataset(ConcatDataset):
         target_filenames: List[str],
         image_loader=read_inria_image,
         target_loader=read_inria_mask,
-        use_edges=False,
+        need_weight_mask=False,
         **kwargs,
     ):
         if len(image_filenames) != len(target_filenames):
@@ -230,7 +228,7 @@ class InrialTiledImageMaskDataset(ConcatDataset):
         datasets = []
         for image, mask in zip(image_filenames, target_filenames):
             dataset = _InrialTiledImageMaskDataset(
-                image, mask, image_loader, target_loader, use_edges=use_edges, **kwargs
+                image, mask, image_loader, target_loader, need_weight_mask=need_weight_mask, **kwargs
             )
             datasets.append(dataset)
         super().__init__(datasets)
@@ -241,17 +239,16 @@ def get_datasets(
     image_size=(224, 224),
     augmentation="hard",
     train_mode="random",
-    use_edges=False,
     sanity_check=False,
     fast=False,
     buildings_only=True,
+    need_weight_mask=False,
 ) -> Tuple[Dataset, Dataset, Optional[WeightedRandomSampler]]:
     """
     Create train and validation data loaders
     :param data_dir: Inria dataset directory
     :param fast: Fast training model. Use only one image per location for training and one image per location for validation
     :param image_size: Size of image crops during training & validation
-    :param use_edges: If True, adds 'edge' target mask
     :param augmentation: Type of image augmentations to use
     :param train_mode:
     'random' - crops tiles from source images randomly.
@@ -302,7 +299,9 @@ def get_datasets(
 
         train_transform = A.Compose([crop_transform(image_size), train_transform])
 
-        trainset = InriaImageMaskDataset(train_img, train_mask, use_edges=use_edges, transform=train_transform)
+        trainset = InriaImageMaskDataset(
+            train_img, train_mask, need_weight_mask=need_weight_mask, transform=train_transform
+        )
 
         num_train_samples = int(len(trainset) * (5000 * 5000) / (image_size[0] * image_size[1]))
         crops_in_image = (5000 * 5000) / (image_size[0] * image_size[1])
@@ -311,12 +310,12 @@ def get_datasets(
         validset = InrialTiledImageMaskDataset(
             valid_img,
             valid_mask,
-            use_edges=use_edges,
             transform=valid_transform,
             # For validation we don't want tiles overlap
             tile_size=image_size,
             tile_step=image_size,
             target_shape=(5000, 5000),
+            need_weight_mask=need_weight_mask,
         )
 
     elif train_mode == "tiles":
@@ -336,7 +335,9 @@ def get_datasets(
             train_mask = train_mask[:128]
 
         train_transform = A.Compose([crop_transform(image_size, input_size=768), train_transform])
-        trainset = InriaImageMaskDataset(train_img, train_mask, use_edges=use_edges, transform=train_transform)
+        trainset = InriaImageMaskDataset(
+            train_img, train_mask, need_weight_mask=need_weight_mask, transform=train_transform
+        )
 
         valid_data = []
         for loc in locations:
@@ -349,12 +350,12 @@ def get_datasets(
         validset = InrialTiledImageMaskDataset(
             valid_img,
             valid_mask,
-            use_edges=use_edges,
             transform=valid_transform,
             # For validation we don't want tiles overlap
             tile_size=image_size,
             tile_step=image_size,
             target_shape=(5000, 5000),
+            need_weight_mask=need_weight_mask,
         )
 
         train_sampler = None
@@ -369,16 +370,15 @@ def get_datasets(
 
 
 def get_xview2_extra_dataset(
-    data_dir: str, image_size=(224, 224), augmentation="hard", use_edges=False, fast=False
+    data_dir: str, image_size=(224, 224), augmentation="hard", need_weight_mask=False, fast=False
 ) -> Tuple[Dataset, WeightedRandomSampler]:
     """
     Create additional train dataset using xView2 dataset
     :param data_dir: xView2 dataset directory
     :param fast: Fast training model. Use only one image per location for training and one image per location for validation
     :param image_size: Size of image crops during training & validation
-    :param use_edges: If True, adds 'edge' target mask
+    :param need_weight_mask: If True, adds 'edge' target mask
     :param augmentation: Type of image augmentations to use
-    :param train_mode:
     'random' - crops tiles from source images randomly.
     'tiles' - crop image in overlapping tiles (guaranteed to process entire dataset)
     :return: (train_loader, valid_loader)
@@ -416,9 +416,9 @@ def get_xview2_extra_dataset(
     trainset = InriaImageMaskDataset(
         image_filenames=train1_img + train2_img,
         mask_filenames=train1_msk + train2_msk,
-        use_edges=use_edges,
         transform=train_transform,
         mask_loader=read_xview_mask,
+        need_weight_mask=need_weight_mask,
     )
 
     num_train_samples = int(len(trainset) * (1024 * 1024) / (image_size[0] * image_size[1]))
@@ -428,7 +428,9 @@ def get_xview2_extra_dataset(
     return trainset, None if fast else train_sampler
 
 
-def get_pseudolabeling_dataset(data_dir: str, include_masks: bool, image_size=(224, 224), augmentation=None):
+def get_pseudolabeling_dataset(
+    data_dir: str, include_masks: bool, image_size=(224, 224), augmentation=None, need_weight_mask=False
+):
     images = fs.find_images_in_dir(os.path.join(data_dir, "test_tiles", "images"))
 
     masks_dir = os.path.join(data_dir, "test_tiles", "masks")
@@ -451,4 +453,5 @@ def get_pseudolabeling_dataset(data_dir: str, include_masks: bool, image_size=(2
         transform=transfrom,
         image_loader=read_inria_image,
         mask_loader=read_inria_mask_with_pseudolabel,
+        need_weight_mask=need_weight_mask,
     )

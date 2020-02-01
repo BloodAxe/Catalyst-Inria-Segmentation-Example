@@ -6,7 +6,7 @@ from pytorch_toolbelt.modules.encoders import EncoderModule
 from torch import nn
 from torch.nn import functional as F
 
-from ..dataset import OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY, OUTPUT_MASK_32_KEY, OUTPUT_MASK_KEY
+from ..dataset import OUTPUT_MASK_32_KEY, OUTPUT_MASK_KEY
 
 __all__ = ["DeeplabV3SegmentationModel", "resnet34_deeplab128", "seresnext101_deeplab256"]
 

@@ -1,5 +1,3 @@
-import math
-
 import albumentations as A
 import cv2
 
