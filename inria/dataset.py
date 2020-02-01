@@ -211,7 +211,7 @@ class _InrialTiledImageMaskDataset(Dataset):
         }
 
         if self.need_weight_mask:
-            data[INPUT_MASK_WEIGHT_KEY] = tensor_from_mask_image(compute_weight_mask(data["mask"])).float()
+            data[INPUT_MASK_WEIGHT_KEY] = tensor_from_mask_image(compute_weight_mask(mask)).float()
 
         return data
 
