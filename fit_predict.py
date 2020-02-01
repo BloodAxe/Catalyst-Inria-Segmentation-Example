@@ -428,7 +428,6 @@ def main():
             model,
             read_inria_image("sample_color.jpg"),
             image_size=image_size,
-            target_key=OUTPUT_MASK_KEY,
             batch_size=args.batch_size,
         )
         mask = ((mask > 0) * 255).astype(np.uint8)
