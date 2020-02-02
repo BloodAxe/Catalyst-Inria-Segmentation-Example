@@ -205,3 +205,18 @@ def densenet121_unet64(input_channels=3, num_classes=1, dropout=0.0, pretrained=
         dropout=dropout,
         abn_block=partial(ABN, activation=ACT_RELU),
     )
+
+
+def densenet121_unet128(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
+    encoder = E.DenseNet121Encoder(pretrained=pretrained, layers=[1, 2, 3, 4])
+    if input_channels != 3:
+        encoder.change_input_channels(input_channels)
+
+    return UnetV2SegmentationModel(
+        encoder,
+        num_classes=num_classes,
+        unet_channels=[128, 128, 256],
+        last_upsample_filters=128,
+        dropout=dropout,
+        abn_block=partial(ABN, activation=ACT_RELU),
+    )

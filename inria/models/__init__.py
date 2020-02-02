@@ -23,6 +23,7 @@ def get_model(model_name: str, dropout=0.0, pretrained=True) -> nn.Module:
         "hrnet34_unet64": unet.hrnet34_unet64,
         "hrnet48_unet64": unet.hrnet48_unet64,
         "densenet121_unet64": unet.densenet121_unet64,
+        "densenet121_unet128": unet.densenet121_unet128,
 
         # Residual UNnet
         "seresnext50_runet64": runet.seresnext50_runet64,
