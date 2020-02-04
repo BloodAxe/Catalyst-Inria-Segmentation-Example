@@ -6,12 +6,28 @@ __all__ = ["crop_transform", "safe_augmentations", "light_augmentations", "mediu
 from typing import Tuple
 
 
-def crop_transform(image_size: Tuple[int, int], input_size=5000):
+def crop_transform(image_size: Tuple[int, int], min_scale=0.75, max_scale=1.25, input_size=5000):
     return A.OneOrOther(
-        A.RandomSizedCrop((int(image_size[0] * 0.75), int(min(input_size, image_size[0] * 1.25))), image_size[0], image_size[1]),
-        A.CropNonEmptyMaskIfExists(image_size[0], image_size[1])
+        A.RandomSizedCrop(
+            (int(image_size[0] * min_scale), int(min(input_size, image_size[0] * max_scale))),
+            image_size[0],
+            image_size[1],
+        ),
+        A.CropNonEmptyMaskIfExists(image_size[0], image_size[1]),
     )
 
+
+def crop_transform_xview2(image_size: Tuple[int, int], min_scale=0.4, max_scale=0.75, input_size=1024):
+    return A.OneOrOther(
+        A.RandomSizedCrop(
+            (int(image_size[0] * min_scale), int(min(input_size, image_size[0] * max_scale))),
+            image_size[0],
+            image_size[1],
+        ),
+        A.Compose(
+            [A.Resize(input_size * 2, input_size * 2), A.CropNonEmptyMaskIfExists(image_size[0], image_size[1])]
+        ),
+    )
 
 
 def safe_augmentations():

@@ -15,6 +15,7 @@ from scipy.ndimage import binary_dilation, binary_erosion
 from torch.utils.data import WeightedRandomSampler, Dataset, ConcatDataset
 
 from .augmentations import *
+from .augmentations import crop_transform_xview2
 
 INPUT_IMAGE_KEY = "image"
 INPUT_IMAGE_ID_KEY = "image_id"
@@ -415,7 +416,7 @@ def get_xview2_extra_dataset(
         train2_img = train2_img[:128]
         train2_msk = train2_msk[:128]
 
-    train_transform = A.Compose([crop_transform(image_size, input_size=1024), train_transform])
+    train_transform = A.Compose([crop_transform_xview2(image_size, input_size=1024), train_transform])
 
     trainset = InriaImageMaskDataset(
         image_filenames=train1_img + train2_img,

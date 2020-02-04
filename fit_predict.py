@@ -23,6 +23,7 @@ from pytorch_toolbelt.utils.catalyst import (
 )
 from pytorch_toolbelt.utils.random import set_manual_seed
 from pytorch_toolbelt.utils.torch_utils import count_parameters, transfer_weights, get_optimizable_parameters
+from sklearn.utils import compute_sample_weight
 from torch import nn
 from torch.optim.lr_scheduler import CyclicLR
 from torch.utils.data import DataLoader, WeightedRandomSampler
@@ -194,7 +195,7 @@ def main():
     )
 
     if extra_data_xview2 is not None:
-        extra_train_ds, sampler = get_xview2_extra_dataset(
+        extra_train_ds, _ = get_xview2_extra_dataset(
             extra_data_xview2,
             image_size=image_size,
             augmentation=augmentations,
@@ -202,9 +203,8 @@ def main():
             need_weight_mask=need_weight_mask,
         )
 
-        if train_sampler is not None:
-            weights = torch.cat([train_sampler.weights, sampler.weights], dim=0)
-            train_sampler = WeightedRandomSampler(weights, train_sampler.num_samples + sampler.num_samples)
+        weights = compute_sample_weight("balanced", [0] * len(train_ds) + [1] * len(extra_train_ds))
+        train_sampler = WeightedRandomSampler(weights, train_sampler.num_samples * 2)
 
         train_ds = train_ds + extra_train_ds
         print("Using extra data from xView2 with", len(extra_train_ds), "samples")
