@@ -1,7 +1,7 @@
 python fit_predict.py\
   -dd "/home/bloodaxe/data/AerialImageDataset"\
   -m hrnet34_unet64\
-  -a None\
+  -a medium\
   -b 48
   -o RAdam\
   -w 24\
