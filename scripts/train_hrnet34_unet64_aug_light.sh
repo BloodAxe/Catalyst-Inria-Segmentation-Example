@@ -11,5 +11,6 @@ python fit_predict.py\
   -lr 1e-3\
   -wd 1e-6\
   --show\
-  --seed 123
+  --seed 123\
+  -l bce 1
 
