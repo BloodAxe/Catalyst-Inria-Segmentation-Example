@@ -31,40 +31,17 @@ def crop_transform_xview2(image_size: Tuple[int, int], min_scale=0.4, max_scale=
 
 
 def safe_augmentations():
-
-    return A.Compose(
-        [
-            A.HorizontalFlip(),
-            A.MaskDropout(5),
-            A.OneOf(
-                [
-                    A.RandomBrightnessContrast(),
-                    A.CLAHE(),
-                    A.HueSaturationValue(),
-                    A.RGBShift(),
-                    A.RandomGamma(),
-                    A.NoOp(),
-                ]
-            ),
-            A.Normalize(),
-        ]
-    )
+    return A.Compose([A.HorizontalFlip(), A.RandomBrightnessContrast(), A.Normalize()])
 
 
 def light_augmentations():
-    return A.Compose(
-        [
-            A.HorizontalFlip(),
-            A.MaskDropout(5),
-            A.ShiftScaleRotate(scale_limit=0.05, rotate_limit=15, border_mode=cv2.BORDER_CONSTANT),
-            A.RandomBrightnessContrast(),
-            A.HueSaturationValue(),
-            A.CLAHE(),
-            A.RGBShift(),
-            A.RandomGamma(),
-            A.Normalize(),
-        ]
-    )
+    return A.Compose([
+        A.HorizontalFlip(),
+        A.RandomBrightnessContrast(),
+        A.ShiftScaleRotate(scale_limit=0.05, rotate_limit=15, border_mode=cv2.BORDER_CONSTANT),
+        A.HueSaturationValue(),
+        A.Normalize()
+    ])
 
 
 def medium_augmentations():
