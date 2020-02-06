@@ -38,7 +38,12 @@ def light_augmentations():
     return A.Compose([
         A.HorizontalFlip(),
         A.RandomBrightnessContrast(),
-        A.ShiftScaleRotate(scale_limit=0.05, rotate_limit=15, border_mode=cv2.BORDER_CONSTANT),
+        A.OneOf([
+            A.ShiftScaleRotate(scale_limit=0.05, rotate_limit=15, border_mode=cv2.BORDER_CONSTANT),
+            A.IAAAffine(),
+            A.IAAPerspective(),
+            A.NoOp()
+        ]),
         A.HueSaturationValue(),
         A.Normalize()
     ])
