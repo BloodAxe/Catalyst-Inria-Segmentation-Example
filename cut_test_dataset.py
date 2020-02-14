@@ -52,7 +52,7 @@ def main():
     )
     args = parser.parse_args()
 
-    cut_dataset_in_patches(args.data_dir, tile_size=(512, 512), tile_step=(512, 512), image_margin=0)
+    cut_dataset_in_patches(args.data_dir, tile_size=(768, 768), tile_step=(512, 512), image_margin=0)
 
 
 if __name__ == "__main__":

@@ -3,6 +3,7 @@ from __future__ import absolute_import
 import argparse
 import collections
 import gc
+import json
 import os
 from datetime import datetime
 from functools import partial
@@ -169,6 +170,11 @@ def main():
     log_dir = os.path.join("runs", checkpoint_prefix)
     os.makedirs(log_dir, exist_ok=False)
 
+    config_fname = os.path.join(log_dir, f"{checkpoint_prefix}.json")
+    with open(config_fname, "w") as f:
+        train_session_args = vars(args)
+        f.write(json.dumps(train_session_args, indent=2))
+
     default_callbacks = [
         PixelAccuracyCallback(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY),
         JaccardMetricPerImage(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY, prefix="jaccard"),
@@ -285,31 +291,32 @@ def main():
         ignore_index = None
         if online_pseudolabeling:
             ignore_index = UNLABELED_SAMPLE
-            unlabeled_label = get_pseudolabeling_dataset(data_dir, include_masks=False, image_size=image_size)
+            unlabeled_label = get_pseudolabeling_dataset(
+                data_dir, include_masks=False, augmentation=None, image_size=image_size
+            )
 
             unlabeled_train = get_pseudolabeling_dataset(
-                data_dir, include_masks=True, image_size=image_size, augmentation=augmentations
+                data_dir, include_masks=True, augmentation=augmentations, image_size=image_size,
             )
 
             loaders["label"] = DataLoader(
-                unlabeled_label, batch_size=batch_size, num_workers=num_workers, pin_memory=True
+                unlabeled_label, batch_size=batch_size//2, num_workers=num_workers, pin_memory=True
             )
 
-            # if train_sampler is not None:
-            #     num_samples = 2 * train_sampler.num_samples
-            # else:
-            #     num_samples = 2 * len(train_ds)
-            # weights = compute_sample_weight("balanced", [0] * len(train_ds) + [1] * len(unlabeled_label))
+            if train_sampler is not None:
+                num_samples = 2 * train_sampler.num_samples
+            else:
+                num_samples = 2 * len(train_ds)
+            weights = compute_sample_weight("balanced", [0] * len(train_ds) + [1] * len(unlabeled_label))
 
-            # train_sampler = WeightedRandomSampler(weights, num_samples, replacement=True)
+            train_sampler = WeightedRandomSampler(weights, num_samples, replacement=True)
             train_ds = train_ds + unlabeled_train
-            train_sampler = None
 
             callbacks += [
                 BCEOnlinePseudolabelingCallback2d(
                     unlabeled_train,
                     pseudolabel_loader="label",
-                    prob_threshold=0.75,
+                    prob_threshold=0.7,
                     output_key=OUTPUT_MASK_KEY,
                     unlabeled_class=UNLABELED_SAMPLE,
                     label_frequency=5,
@@ -424,12 +431,7 @@ def main():
 
         unpack_checkpoint(torch.load(model_checkpoint), model=model)
 
-        mask = predict(
-            model,
-            read_inria_image("sample_color.jpg"),
-            image_size=image_size,
-            batch_size=args.batch_size,
-        )
+        mask = predict(model, read_inria_image("sample_color.jpg"), image_size=image_size, batch_size=args.batch_size,)
         mask = ((mask > 0) * 255).astype(np.uint8)
         name = os.path.join(log_dir, "sample_color.jpg")
         cv2.imwrite(name, mask)

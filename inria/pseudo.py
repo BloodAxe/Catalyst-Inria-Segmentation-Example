@@ -60,11 +60,19 @@ class BCEOnlinePseudolabelingCallback2d(Callback):
     #     if state.loader_name == self.pseudolabel_loader:
     #         self.predictions = []
 
+    def on_stage_start(self, state: RunnerState):
+        self.last_labeled_epoch = None
+
     def on_epoch_start(self, state: RunnerState):
-        self.should_relabel = (
-            self.last_labeled_epoch is None or (state.epoch - self.last_labeled_epoch) % self.label_frequency == 0
+        self.should_relabel = self.last_labeled_epoch is None or (
+            state.epoch == self.last_labeled_epoch + self.label_frequency
         )
-        self.last_labeled_epoch = state.epoch
+        print("Should relabel", self.should_relabel, state.epoch)
+
+    def on_epoch_end(self, state: RunnerState):
+        if self.should_relabel:
+            self.last_labeled_epoch = state.epoch
+            print("last_labeled_epoch", state.epoch)
 
     def get_probabilities(self, state: RunnerState):
         probs = state.output[self.output_key].detach().sigmoid()

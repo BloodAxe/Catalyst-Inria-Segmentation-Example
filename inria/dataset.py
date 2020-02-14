@@ -444,11 +444,11 @@ def get_pseudolabeling_dataset(
     masks = [os.path.join(masks_dir, fs.id_from_fname(image_fname) + ".png") for image_fname in images]
 
     if augmentation == "hard":
-        transfrom = hard_augmentations()
+        transfrom = A.Compose([crop_transform(image_size, input_size=768), hard_augmentations()])
     elif augmentation == "medium":
-        transfrom = medium_augmentations()
+        transfrom = A.Compose([crop_transform(image_size, input_size=768), medium_augmentations()])
     elif augmentation == "light":
-        transfrom = light_augmentations()
+        transfrom = A.Compose([crop_transform(image_size, input_size=768), light_augmentations()])
     else:
         transfrom = A.Normalize()
 
