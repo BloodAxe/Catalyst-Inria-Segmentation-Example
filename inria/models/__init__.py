@@ -40,8 +40,9 @@ def get_model(model_name: str, dropout=0.0, pretrained=True) -> nn.Module:
         "hrnet18": hrnet.hrnet18,
         "hrnet34": hrnet.hrnet34,
         "hrnet48": hrnet.hrnet48,
-
-        "hg8": hg.hg8
+        "hg8": hg.hg8,
+        "hg4": hg.hg4,
+        "shg4": hg.shg4,
     }
 
     return registry[model_name.lower()](dropout=dropout, pretrained=pretrained)

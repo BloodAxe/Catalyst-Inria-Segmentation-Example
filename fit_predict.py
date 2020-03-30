@@ -369,7 +369,27 @@ def main():
             ):
                 criterion_callback = CriterionCallback(
                     prefix="seg_loss_dsv/" + dsv_input,
-                    input_key=OUTPUT_MASK_KEY,
+                    input_key=INPUT_MASK_KEY,
+                    output_key=dsv_input,
+                    criterion_key=criterions,
+                    multiplier=1.0,
+                )
+                callbacks.append(criterion_callback)
+                losses.append(criterion_callback.prefix)
+
+        if True:
+            print("Using Hourglass DSV")
+            criterions = "dsv"
+            dsv_loss_name = "kl"
+
+            criterions_dict[criterions] = get_loss(dsv_loss_name, ignore_index=ignore_index)
+            num_supervision_inputs = 3
+            dsv_outputs = [OUTPUT_MASK_4_KEY + "_after_hg_" + str(i) for i in range(num_supervision_inputs)]
+
+            for i, dsv_input in enumerate(dsv_outputs):
+                criterion_callback = CriterionCallback(
+                    prefix="supervision/" + dsv_input,
+                    input_key=INPUT_MASK_KEY,
                     output_key=dsv_input,
                     criterion_key=criterions,
                     multiplier=1.0,

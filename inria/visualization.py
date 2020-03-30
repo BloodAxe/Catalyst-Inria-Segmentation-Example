@@ -11,7 +11,7 @@ from catalyst.dl.callbacks import TensorboardLogger
 from catalyst.utils.tensorboard import SummaryWriter
 from pytorch_toolbelt.utils.torch_utils import rgb_image_from_tensor, to_numpy
 
-from inria.dataset import OUTPUT_OFFSET_KEY
+from inria.dataset import OUTPUT_OFFSET_KEY, OUTPUT_MASK_4_KEY
 
 
 def draw_inria_predictions(
@@ -98,8 +98,16 @@ def draw_inria_predictions(
             ) * np.array([0, 255, 0])
 
             offset = (x + y).clip(0, 255).astype(np.uint8)
-            offset = cv2.resize(offset, (overlay.shape[1], overlay.shape[0]))
+            offset = cv2.resize(offset, (image.shape[1], image.shape[0]))
             overlay = np.row_stack([overlay, offset])
+
+        dsv_inputs = [OUTPUT_MASK_4_KEY + "_after_hg_" + str(i) for i in range(8)]
+        for dsv_input_key in dsv_inputs:
+            if dsv_input_key in output:
+                dsv_p = to_numpy(output[dsv_input_key][i].detach().sigmoid().squeeze(0))
+                dsv_p = cv2.resize((dsv_p * 255).astype(np.uint8), (image.shape[1], image.shape[0]))
+                dsv_p = cv2.cvtColor(dsv_p, cv2.COLOR_GRAY2RGB)
+                overlay = np.row_stack([overlay, dsv_p])
 
         if image_id_key is not None and image_id_key in input:
             image_id = input[image_id_key][i]
