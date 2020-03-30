@@ -22,6 +22,7 @@ from pytorch_toolbelt.utils.catalyst import (
     PixelAccuracyCallback,
     draw_binary_segmentation_predictions,
 )
+from pytorch_toolbelt.utils.catalyst.metrics import OutputDistributionCallback
 from pytorch_toolbelt.utils.random import set_manual_seed
 from pytorch_toolbelt.utils.torch_utils import count_parameters, transfer_weights, get_optimizable_parameters
 from sklearn.utils import compute_sample_weight
@@ -53,6 +54,7 @@ from inria.optim import get_optimizer
 from inria.pseudo import BCEOnlinePseudolabelingCallback2d
 from inria.scheduler import get_scheduler
 from inria.utils import clean_checkpoint, report_checkpoint
+from inria.visualization import draw_inria_predictions
 
 
 def main():
@@ -179,11 +181,12 @@ def main():
         PixelAccuracyCallback(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY),
         JaccardMetricPerImage(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY, prefix="jaccard"),
         OptimalThreshold(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY, prefix="optimized_jaccard"),
+        # OutputDistributionCallback(output_key=OUTPUT_MASK_KEY, activation=torch.sigmoid),
     ]
 
     if show:
         visualize_inria_predictions = partial(
-            draw_binary_segmentation_predictions,
+            draw_inria_predictions,
             image_key=INPUT_IMAGE_KEY,
             image_id_key=INPUT_IMAGE_ID_KEY,
             targets_key=INPUT_MASK_KEY,
@@ -255,7 +258,9 @@ def main():
             sampler=train_sampler,
         )
 
-        loaders["valid"] = DataLoader(valid_ds, batch_size=batch_size, num_workers=num_workers, pin_memory=True)
+        loaders["valid"] = DataLoader(
+            valid_ds, batch_size=batch_size, num_workers=num_workers, pin_memory=True, shuffle=False, drop_last=False
+        )
 
         runner.train(
             fp16=fp16,
@@ -296,11 +301,11 @@ def main():
             )
 
             unlabeled_train = get_pseudolabeling_dataset(
-                data_dir, include_masks=True, augmentation=augmentations, image_size=image_size,
+                data_dir, include_masks=True, augmentation=augmentations, image_size=image_size
             )
 
             loaders["label"] = DataLoader(
-                unlabeled_label, batch_size=batch_size//2, num_workers=num_workers, pin_memory=True
+                unlabeled_label, batch_size=batch_size // 2, num_workers=num_workers, pin_memory=True
             )
 
             if train_sampler is not None:
@@ -431,7 +436,7 @@ def main():
 
         unpack_checkpoint(torch.load(model_checkpoint), model=model)
 
-        mask = predict(model, read_inria_image("sample_color.jpg"), image_size=image_size, batch_size=args.batch_size,)
+        mask = predict(model, read_inria_image("sample_color.jpg"), image_size=image_size, batch_size=args.batch_size)
         mask = ((mask > 0) * 255).astype(np.uint8)
         name = os.path.join(log_dir, "sample_color.jpg")
         cv2.imwrite(name, mask)

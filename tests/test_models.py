@@ -1,6 +1,7 @@
 import torch
 
 from inria.dataset import OUTPUT_MASK_KEY
+from inria.models.hg import hg8
 from inria.models.unet import hrnet18_unet64
 from inria.models.runet import hrnet18_runet64
 from pytorch_toolbelt.utils.torch_utils import count_parameters
@@ -15,10 +16,20 @@ def test_resnet34_rfpncat128():
     print(mask.mean(), mask.std())
 
 
-
 @torch.no_grad()
 def test_hrnet18_runet64():
     net = hrnet18_runet64().eval()
+    print(net)
+    print(count_parameters(net))
+    input = torch.rand((2, 3, 256, 256))
+    output = net(input)
+    mask = output[OUTPUT_MASK_KEY]
+
+
+@torch.no_grad()
+def test_hg8():
+    net = hg8().eval()
+
     print(net)
     print(count_parameters(net))
     input = torch.rand((2, 3, 256, 256))

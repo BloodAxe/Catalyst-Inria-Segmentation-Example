@@ -9,7 +9,7 @@ from pytorch_toolbelt.modules.encoders import EncoderModule
 from torch import nn
 from torch.nn import functional as F
 
-from ..dataset import OUTPUT_MASK_KEY
+from ..dataset import OUTPUT_MASK_KEY, OUTPUT_OFFSET_KEY
 
 __all__ = ["seresnext50_unet64", "hrnet18_unet64", "hrnet34_unet64", "hrnet48_unet64", "densenet121_unet64"]
 
@@ -68,8 +68,6 @@ class UNetDecoderV2(DecoderModule):
 
         self.last_upsample = UnetDecoderBlock(decoder_features[0], last_upsample_filters, last_upsample_filters)
 
-        self.final = nn.Conv2d(last_upsample_filters, mask_channels, kernel_size=1)
-
     def get_decoder(self, layer):
         in_channels = (
             self.encoder_features[layer + 1]
@@ -90,50 +88,7 @@ class UNetDecoderV2(DecoderModule):
             x = bottleneck(x, feature_maps[rev_idx - 1])
 
         x = self.last_upsample(x)
-
-        f = self.final(x)
-
-        return f
-
-
-class UnetV2SegmentationModel(nn.Module):
-    def __init__(
-        self,
-        encoder: EncoderModule,
-        num_classes: int,
-        unet_channels: Union[int, List[int]],
-        last_upsample_filters=None,
-        dropout=0.25,
-        abn_block: Union[ABN, Callable[[int], nn.Module]] = ABN,
-        full_size_mask=True,
-    ):
-        super().__init__()
-        self.encoder = encoder
-
-        self.decoder = UNetDecoderV2(
-            feature_maps=encoder.output_filters,
-            decoder_features=unet_channels,
-            last_upsample_filters=last_upsample_filters,
-            mask_channels=num_classes,
-            dropout=dropout,
-            abn_block=abn_block,
-        )
-
-        self.full_size_mask = full_size_mask
-
-    def forward(self, x):
-        features = self.encoder(x)
-
-        # Decode mask
-        mask = self.decoder(features)
-
-        if self.full_size_mask:
-            mask = F.interpolate(mask, size=x.size()[2:], mode="bilinear", align_corners=False)
-
-        output = {OUTPUT_MASK_KEY: mask}
-        return output
-
-
+        return x
 
 
 class UnetV3SegmentationModel(nn.Module):
@@ -160,17 +115,31 @@ class UnetV3SegmentationModel(nn.Module):
         )
 
         self.full_size_mask = full_size_mask
+        self.offsetmap = nn.Conv2d(last_upsample_filters, 2, kernel_size=3, padding=1)
+        self.mask = nn.Conv2d(last_upsample_filters, num_classes, kernel_size=3, padding=1)
 
     def forward(self, x):
         features = self.encoder(x)
 
         # Decode mask
-        mask = self.decoder(features)
+        mask_features = self.decoder(features)
+
+        # generate grid by stacking coordinates
+        height, width = mask_features.size(2), mask_features.size(3)
+        xs = torch.linspace(-1, 1, width, device=mask_features.device, dtype=mask_features.dtype)
+        ys = torch.linspace(-1, 1, height, device=mask_features.device, dtype=mask_features.dtype)
+        base_grid: torch.Tensor = torch.stack(torch.meshgrid([xs, ys])).transpose(1, 2)  # 2xHxW
+
+        offset = self.offsetmap(mask_features)
+        grid = base_grid + offset
+
+        mask = self.mask(mask_features)
+        aligned_mask = F.grid_sample(mask, grid.permute(0, 2, 3, 1), align_corners=False)
 
         if self.full_size_mask:
-            mask = F.interpolate(mask, size=x.size()[2:], mode="bilinear", align_corners=False)
+            aligned_mask = F.interpolate(aligned_mask, size=x.size()[2:], mode="bilinear", align_corners=False)
 
-        output = {OUTPUT_MASK_KEY: mask}
+        output = {OUTPUT_MASK_KEY: aligned_mask, OUTPUT_OFFSET_KEY: offset}
         return output
 
 
@@ -179,7 +148,7 @@ def seresnext50_unet64(input_channels=3, num_classes=1, dropout=0.0, pretrained=
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
-    return UnetV2SegmentationModel(
+    return UnetV3SegmentationModel(
         encoder,
         num_classes=num_classes,
         unet_channels=[64, 128, 256, 256],
@@ -193,7 +162,7 @@ def hrnet18_unet64(input_channels=3, num_classes=1, dropout=0.0, pretrained=True
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
-    return UnetV2SegmentationModel(
+    return UnetV3SegmentationModel(
         encoder,
         num_classes=num_classes,
         unet_channels=[64, 128, 256],
@@ -207,7 +176,7 @@ def hrnet34_unet64(input_channels=3, num_classes=1, dropout=0.0, pretrained=True
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
-    return UnetV2SegmentationModel(
+    return UnetV3SegmentationModel(
         encoder,
         num_classes=num_classes,
         unet_channels=[128, 128, 256],
@@ -222,7 +191,7 @@ def hrnet48_unet64(input_channels=3, num_classes=1, dropout=0.0, pretrained=True
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
-    return UnetV2SegmentationModel(
+    return UnetV3SegmentationModel(
         encoder,
         num_classes=num_classes,
         unet_channels=[128, 128, 256],
@@ -232,12 +201,12 @@ def hrnet48_unet64(input_channels=3, num_classes=1, dropout=0.0, pretrained=True
     )
 
 
-def densenet121_unet64(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
+def densenet121_unet64_offset(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
     encoder = E.DenseNet121Encoder(pretrained=pretrained, layers=[1, 2, 3, 4])
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
-    return UnetV2SegmentationModel(
+    return UnetV3SegmentationModel(
         encoder,
         num_classes=num_classes,
         unet_channels=[128, 128, 256],
@@ -252,37 +221,7 @@ def densenet121_unet128(input_channels=3, num_classes=1, dropout=0.0, pretrained
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
-    return UnetV2SegmentationModel(
-        encoder,
-        num_classes=num_classes,
-        unet_channels=[128, 128, 256],
-        last_upsample_filters=128,
-        dropout=dropout,
-        abn_block=partial(ABN, activation=ACT_RELU),
-    )
-
-
-def xresnet50_unet128(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
-    encoder = E.XResNet50Encoder(pretrained=pretrained, layers=[1, 2, 3, 4], first_pool=nn.AvgPool2d)
-    if input_channels != 3:
-        encoder.change_input_channels(input_channels)
-
-    return UnetV2SegmentationModel(
-        encoder,
-        num_classes=num_classes,
-        unet_channels=[128, 128, 256],
-        last_upsample_filters=128,
-        dropout=dropout,
-        abn_block=partial(ABN, activation=ACT_RELU),
-    )
-
-
-def sexresnet50_unet128(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
-    encoder = E.SEXResNet50Encoder(pretrained=pretrained, layers=[1, 2, 3, 4], first_pool=nn.AvgPool2d)
-    if input_channels != 3:
-        encoder.change_input_channels(input_channels)
-
-    return UnetV2SegmentationModel(
+    return UnetV3SegmentationModel(
         encoder,
         num_classes=num_classes,
         unet_channels=[128, 128, 256],

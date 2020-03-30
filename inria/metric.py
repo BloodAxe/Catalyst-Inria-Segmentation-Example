@@ -104,7 +104,7 @@ class OptimalThreshold(Callback):
             lambda: {"intersection": np.zeros_like(self.thresholds), "union": np.zeros_like(self.thresholds)}
         )
 
-    def on_loader_start(self, state):
+    def on_loader_start(self, state: RunnerState):
         self.scores_per_image = defaultdict(
             lambda: {"intersection": np.zeros_like(self.thresholds), "union": np.zeros_like(self.thresholds)}
         )
@@ -148,7 +148,7 @@ class OptimalThreshold(Callback):
         iou_at_threshold = iou[threshold_index]
         threshold_value = self.thresholds[threshold_index]
 
-        state.metrics.epoch_values[state.loader_name][self.prefix + "/" + "threshold" ] = float(threshold_value)
+        state.metrics.epoch_values[state.loader_name][self.prefix + "/" + "threshold"] = float(threshold_value)
         state.metrics.epoch_values[state.loader_name][self.prefix] = float(iou_at_threshold)
 
         logger = get_tensorboard_logger(state)

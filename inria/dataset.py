@@ -19,18 +19,19 @@ from .augmentations import crop_transform_xview2
 
 INPUT_IMAGE_KEY = "image"
 INPUT_IMAGE_ID_KEY = "image_id"
-INPUT_MASK_KEY = "mask"
-INPUT_MASK_WEIGHT_KEY = "weights"
-OUTPUT_MASK_KEY = "mask"
+INPUT_MASK_KEY = "true_mask"
+INPUT_MASK_WEIGHT_KEY = "true_weights"
+OUTPUT_MASK_KEY = "pred_mask"
+OUTPUT_OFFSET_KEY = "pred_offset"
 INPUT_INDEX_KEY = "index"
 
 # Smaller masks for deep supervision
-OUTPUT_MASK_4_KEY = "mask_4"
-OUTPUT_MASK_8_KEY = "mask_8"
-OUTPUT_MASK_16_KEY = "mask_16"
-OUTPUT_MASK_32_KEY = "mask_32"
+OUTPUT_MASK_4_KEY = "pred_mask_4"
+OUTPUT_MASK_8_KEY = "pred_mask_8"
+OUTPUT_MASK_16_KEY = "pred_mask_16"
+OUTPUT_MASK_32_KEY = "pred_mask_32"
 
-OUTPUT_CLASS_KEY = "classes"
+OUTPUT_CLASS_KEY = "pred_classes"
 
 UNLABELED_SAMPLE = 127
 
@@ -310,6 +311,9 @@ def get_datasets(
 
         num_train_samples = int(len(trainset) * (5000 * 5000) / (image_size[0] * image_size[1]))
         crops_in_image = (5000 * 5000) / (image_size[0] * image_size[1])
+        if fast:
+            num_train_samples = 128
+
         train_sampler = WeightedRandomSampler(torch.ones(len(trainset)) * crops_in_image, num_train_samples)
 
         validset = InrialTiledImageMaskDataset(
@@ -367,11 +371,12 @@ def get_datasets(
     else:
         raise ValueError(train_mode)
 
+
     if sanity_check:
         first_batch = [trainset[i] for i in range(32)]
         return first_batch * 50, first_batch, None
 
-    return trainset, validset, None if fast else train_sampler
+    return trainset, validset, train_sampler
 
 
 def get_xview2_extra_dataset(
@@ -428,6 +433,9 @@ def get_xview2_extra_dataset(
 
     num_train_samples = int(len(trainset) * (1024 * 1024) / (image_size[0] * image_size[1]))
     crops_in_image = (1024 * 1024) / (image_size[0] * image_size[1])
+    if fast:
+        num_train_samples = 128
+
     train_sampler = WeightedRandomSampler(torch.ones(len(trainset)) * crops_in_image, num_train_samples)
 
     return trainset, None if fast else train_sampler
