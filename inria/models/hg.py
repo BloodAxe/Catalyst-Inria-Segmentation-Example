@@ -7,6 +7,19 @@ from inria.dataset import OUTPUT_MASK_KEY, OUTPUT_MASK_4_KEY
 import torch.nn.functional as F
 
 
+class HGSegmentationDecoderNaked(nn.Module):
+    def __init__(self, input_channels: int, stride: int, mask_channels: int):
+        super().__init__()
+
+        self.conv1 = nn.Conv2d(input_channels, input_channels, kernel_size=1)
+        self.conv2 = nn.Conv2d(input_channels, mask_channels, kernel_size=1)
+
+    def forward(self, x):
+        x = self.conv1(x)
+        x = self.conv2(x)
+        return x
+
+
 class HGSegmentationDecoder(nn.Module):
     def __init__(self, input_channels: int, stride: int, mask_channels: int):
         super().__init__()
