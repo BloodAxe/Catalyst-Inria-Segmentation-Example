@@ -43,6 +43,7 @@ def get_model(model_name: str, dropout=0.0, pretrained=True) -> nn.Module:
         "hg8": hg.hg8,
         "hg4": hg.hg4,
         "shg4": hg.shg4,
+        "shg8": hg.shg8,
     }
 
     return registry[model_name.lower()](dropout=dropout, pretrained=pretrained)
