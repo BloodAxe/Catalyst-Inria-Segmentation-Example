@@ -85,3 +85,8 @@ def shg4(num_classes=1, dropout=0, pretrained=False):
 def hg8(num_classes=1, dropout=0, pretrained=False):
     encoder = StackedHGEncoder(stack_level=8)
     return HGSegmentationModel(encoder, num_classes=num_classes)
+
+
+def shg8(num_classes=1, dropout=0, pretrained=False):
+    encoder = StackedSupervisedHGEncoder(input_channels=3, stack_level=8, supervision_channels=num_classes)
+    return SupervisedHGSegmentationModel(encoder, num_classes=num_classes)

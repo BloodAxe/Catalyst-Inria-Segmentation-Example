@@ -22,7 +22,6 @@ from pytorch_toolbelt.utils.catalyst import (
     PixelAccuracyCallback,
     draw_binary_segmentation_predictions,
 )
-from pytorch_toolbelt.utils.catalyst.metrics import OutputDistributionCallback
 from pytorch_toolbelt.utils.random import set_manual_seed
 from pytorch_toolbelt.utils.torch_utils import count_parameters, transfer_weights, get_optimizable_parameters
 from sklearn.utils import compute_sample_weight
@@ -50,6 +49,7 @@ from inria.factory import predict
 from inria.losses import get_loss, AdaptiveMaskLoss2d
 from inria.metric import JaccardMetricPerImage, OptimalThreshold
 from inria.models import get_model
+from inria.models.hg import SupervisedHGSegmentationModel
 from inria.optim import get_optimizer
 from inria.pseudo import BCEOnlinePseudolabelingCallback2d
 from inria.scheduler import get_scheduler
@@ -377,13 +377,12 @@ def main():
                 callbacks.append(criterion_callback)
                 losses.append(criterion_callback.prefix)
 
-        if True:
+        if isinstance(model, SupervisedHGSegmentationModel):
             print("Using Hourglass DSV")
-            criterions = "dsv"
             dsv_loss_name = "kl"
 
-            criterions_dict[criterions] = get_loss(dsv_loss_name, ignore_index=ignore_index)
-            num_supervision_inputs = 3
+            criterions_dict["dsv"] = get_loss(dsv_loss_name, ignore_index=ignore_index)
+            num_supervision_inputs = model.encoder.num_blocks - 1
             dsv_outputs = [OUTPUT_MASK_4_KEY + "_after_hg_" + str(i) for i in range(num_supervision_inputs)]
 
             for i, dsv_input in enumerate(dsv_outputs):
@@ -391,7 +390,7 @@ def main():
                     prefix="supervision/" + dsv_input,
                     input_key=INPUT_MASK_KEY,
                     output_key=dsv_input,
-                    criterion_key=criterions,
+                    criterion_key="dsv",
                     multiplier=1.0,
                 )
                 callbacks.append(criterion_callback)
