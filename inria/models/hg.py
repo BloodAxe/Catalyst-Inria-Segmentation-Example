@@ -12,10 +12,14 @@ class HGSegmentationDecoderNaked(nn.Module):
         super().__init__()
 
         self.conv1 = nn.Conv2d(input_channels, input_channels, kernel_size=1)
+        self.bn1 = nn.BatchNorm2d(input_channels)
+
         self.conv2 = nn.Conv2d(input_channels, mask_channels, kernel_size=1)
 
     def forward(self, x):
         x = self.conv1(x)
+        x = self.bn1(x)
+        x = F.relu(x, inplace=True)
         x = self.conv2(x)
         return x
 
@@ -61,6 +65,9 @@ class HGSegmentationModel(nn.Module):
         # Decode mask
         mask = self.decoder(features[-1])
 
+        if self.full_size_mask:
+            mask = F.interpolate(mask, x.size()[2:], mode="bilinear", align_corners=False)
+
         output = {OUTPUT_MASK_KEY: mask}
         return output
 
@@ -77,6 +84,9 @@ class SupervisedHGSegmentationModel(nn.Module):
 
         # Decode mask
         mask = self.decoder(features[-1])
+
+        if self.full_size_mask:
+            mask = F.interpolate(mask, x.size()[2:], mode="bilinear", align_corners=False)
 
         output = {OUTPUT_MASK_KEY: mask}
         for i, sup in enumerate(supervision):

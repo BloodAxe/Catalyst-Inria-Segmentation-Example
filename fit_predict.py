@@ -391,7 +391,7 @@ def main():
                     input_key=INPUT_MASK_KEY,
                     output_key=dsv_input,
                     criterion_key="dsv",
-                    multiplier=1.0,
+                    multiplier=(i + 1) / num_supervision_inputs,
                 )
                 callbacks.append(criterion_callback)
                 losses.append(criterion_callback.prefix)
