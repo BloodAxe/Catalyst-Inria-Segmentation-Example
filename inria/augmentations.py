@@ -79,8 +79,7 @@ def hard_augmentations():
             A.RandomGridShuffle(),
             A.OneOf(
                 [
-                    A.ShiftScaleRotate(scale_limit=(0.9, 1.0), rotate_limit=45, border_mode=cv2.BORDER_CONSTANT),
-                    A.ShiftScaleRotate(scale_limit=(1, 1.1), rotate_limit=45, border_mode=cv2.BORDER_CONSTANT),
+                    A.ShiftScaleRotate(scale_limit=0.2, rotate_limit=45, border_mode=cv2.BORDER_CONSTANT),
                     A.IAAAffine(shear=20, mode="constant"),
                 ]
             ),
