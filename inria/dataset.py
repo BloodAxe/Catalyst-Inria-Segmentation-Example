@@ -98,11 +98,12 @@ class InriaImageMaskDataset(Dataset, PseudolabelDatasetMixin):
         image_loader=read_inria_image,
         mask_loader=read_inria_mask,
         need_weight_mask=False,
+        image_ids=None
     ):
         if mask_filenames is not None and len(image_filenames) != len(mask_filenames):
             raise ValueError("Number of images does not corresponds to number of targets")
 
-        self.image_ids = [fs.id_from_fname(fname) for fname in image_filenames]
+        self.image_ids = [fs.id_from_fname(fname) for fname in image_filenames] if image_ids is None else image_ids
         self.need_weight_mask = need_weight_mask
 
         self.images = image_filenames
@@ -335,17 +336,16 @@ def get_datasets(
 
         train_img = inria_tiles[inria_tiles["train"] == 1]["image"].tolist()
         train_mask = inria_tiles[inria_tiles["train"] == 1]["mask"].tolist()
-
-        train_img = [os.path.join(data_dir, x) for x in train_img]
-        train_mask = [os.path.join(data_dir, x) for x in train_mask]
+        train_img_ids = inria_tiles[inria_tiles["train"] == 1]["image_id"].tolist()
 
         if fast:
             train_img = train_img[:128]
             train_mask = train_mask[:128]
+            train_img_ids = train_img_ids[:128]
 
         train_transform = A.Compose([crop_transform(image_size, input_size=768), train_transform])
         trainset = InriaImageMaskDataset(
-            train_img, train_mask, need_weight_mask=need_weight_mask, transform=train_transform
+            train_img, train_mask, image_ids=train_img_ids, need_weight_mask=need_weight_mask, transform=train_transform
         )
 
         valid_data = []

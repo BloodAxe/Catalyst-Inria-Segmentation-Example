@@ -11,6 +11,8 @@ from torch import nn
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
+from inria.dataset import OUTPUT_MASK_KEY
+
 
 class InMemoryDataset(Dataset):
     def __init__(self, data: List[Dict], transform: A.Compose):
@@ -58,7 +60,7 @@ def predict(model: nn.Module, image: np.ndarray, image_size, normalize=A.Normali
         image = batch["image"].cuda(non_blocking=True)
         coords = batch["coords"]
         mask_batch = model(image)
-        tile_merger.integrate_batch(mask_batch, coords)
+        tile_merger.integrate_batch(mask_batch[OUTPUT_MASK_KEY], coords)
 
     mask = tile_merger.merge()
 
