@@ -22,7 +22,6 @@ from pytorch_toolbelt.utils.catalyst import (
     PixelAccuracyCallback,
     draw_binary_segmentation_predictions,
 )
-from pytorch_toolbelt.utils.catalyst.metrics import OutputDistributionCallback
 from pytorch_toolbelt.utils.random import set_manual_seed
 from pytorch_toolbelt.utils.torch_utils import count_parameters, transfer_weights, get_optimizable_parameters
 from sklearn.utils import compute_sample_weight
