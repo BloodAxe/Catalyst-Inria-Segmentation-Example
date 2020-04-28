@@ -98,7 +98,7 @@ class InriaImageMaskDataset(Dataset, PseudolabelDatasetMixin):
         image_loader=read_inria_image,
         mask_loader=read_inria_mask,
         need_weight_mask=False,
-        image_ids=None
+        image_ids=None,
     ):
         if mask_filenames is not None and len(image_filenames) != len(mask_filenames):
             raise ValueError("Number of images does not corresponds to number of targets")
@@ -345,7 +345,11 @@ def get_datasets(
 
         train_transform = A.Compose([crop_transform(image_size, input_size=768), train_transform])
         trainset = InriaImageMaskDataset(
-            train_img, train_mask, image_ids=train_img_ids, need_weight_mask=need_weight_mask, transform=train_transform
+            train_img,
+            train_mask,
+            image_ids=train_img_ids,
+            need_weight_mask=need_weight_mask,
+            transform=train_transform,
         )
 
         valid_data = []
@@ -370,7 +374,6 @@ def get_datasets(
         train_sampler = None
     else:
         raise ValueError(train_mode)
-
 
     if sanity_check:
         first_batch = [trainset[i] for i in range(32)]

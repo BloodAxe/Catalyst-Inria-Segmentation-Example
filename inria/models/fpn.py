@@ -1,12 +1,13 @@
-from pytorch_toolbelt.inference.functional import pad_image_tensor, unpad_image_tensor
-from pytorch_toolbelt.modules import ABN
+from collections import OrderedDict
+
+from pytorch_toolbelt.modules import ABN, conv1x1
 from pytorch_toolbelt.modules import encoders as E
 from pytorch_toolbelt.modules.decoders import FPNSumDecoder, FPNCatDecoder
 from pytorch_toolbelt.modules.encoders import EncoderModule
 from torch import nn
 from torch.nn import functional as F
 
-from ..dataset import OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY, OUTPUT_MASK_32_KEY, OUTPUT_MASK_KEY
+from ..dataset import OUTPUT_MASK_KEY
 
 __all__ = [
     "FPNSumSegmentationModel",
@@ -22,46 +23,31 @@ __all__ = [
 
 class FPNSumSegmentationModel(nn.Module):
     def __init__(
-        self,
-        encoder: EncoderModule,
-        num_classes: int,
-        dropout=0.25,
-        abn_block=ABN,
-        full_size_mask=True,
-        fpn_channels=256,
+        self, encoder: EncoderModule, num_classes: int, dropout=0.25, full_size_mask=True, fpn_channels=256,
     ):
         super().__init__()
         self.encoder = encoder
 
-        self.decoder = FPNSumDecoder(
-            feature_maps=encoder.output_filters,
-            output_channels=num_classes,
-            dsv_channels=num_classes,
-            fpn_channels=fpn_channels,
-            abn_block=abn_block,
-            dropout=dropout,
+        self.decoder = FPNSumDecoder(feature_maps=encoder.output_filters, fpn_channels=fpn_channels,)
+        self.mask = nn.Sequential(
+            OrderedDict([("drop", nn.Dropout2d(dropout)), ("conv", conv1x1(fpn_channels, num_classes))])
         )
 
         self.full_size_mask = full_size_mask
 
     def forward(self, x):
-        x, pad = pad_image_tensor(x, 32)
-
-        enc_features = self.encoder(x)
+        x_size = x.size()
+        x = self.encoder(x)
+        x = self.decoder(x)
 
         # Decode mask
-        mask, dsv = self.decoder(enc_features)
+        mask = self.mask(x[0])
 
         if self.full_size_mask:
-            mask = F.interpolate(mask, size=x.size()[2:], mode="bilinear", align_corners=False)
-            mask = unpad_image_tensor(mask, pad)
+            mask = F.interpolate(mask, size=x_size[2:], mode="bilinear", align_corners=False)
 
         output = {
             OUTPUT_MASK_KEY: mask,
-            OUTPUT_MASK_4_KEY: dsv[3],
-            OUTPUT_MASK_8_KEY: dsv[2],
-            OUTPUT_MASK_16_KEY: dsv[1],
-            OUTPUT_MASK_32_KEY: dsv[0],
         }
 
         return output
@@ -69,43 +55,30 @@ class FPNSumSegmentationModel(nn.Module):
 
 class FPNCatSegmentationModel(nn.Module):
     def __init__(
-        self,
-        encoder: EncoderModule,
-        num_classes: int,
-        dropout=0.25,
-        abn_block=ABN,
-        fpn_channels=256,
-        full_size_mask=True,
+        self, encoder: EncoderModule, num_classes: int, dropout=0.25, fpn_channels=256, full_size_mask=True,
     ):
         super().__init__()
         self.encoder = encoder
 
-        self.decoder = FPNCatDecoder(
-            feature_maps=encoder.output_filters,
-            output_channels=num_classes,
-            dsv_channels=num_classes,
-            fpn_channels=fpn_channels,
-            abn_block=abn_block,
-            dropout=dropout,
+        self.decoder = FPNCatDecoder(feature_maps=encoder.output_filters, fpn_channels=fpn_channels)
+        self.mask = nn.Sequential(
+            OrderedDict([("drop", nn.Dropout2d(dropout)), ("conv", conv1x1(fpn_channels, num_classes))])
         )
-
         self.full_size_mask = full_size_mask
 
     def forward(self, x):
-        enc_features = self.encoder(x)
+        x_size = x.size()
+        x = self.encoder(x)
+        x = self.decoder(x)
 
         # Decode mask
-        mask, dsv = self.decoder(enc_features)
+        mask = self.mask(x[0])
 
         if self.full_size_mask:
-            mask = F.interpolate(mask, size=x.size()[2:], mode="bilinear", align_corners=False)
+            mask = F.interpolate(mask, size=x_size[2:], mode="bilinear", align_corners=False)
 
         output = {
             OUTPUT_MASK_KEY: mask,
-            OUTPUT_MASK_4_KEY: dsv[0],
-            OUTPUT_MASK_8_KEY: dsv[1],
-            OUTPUT_MASK_16_KEY: dsv[2],
-            OUTPUT_MASK_32_KEY: dsv[3],
         }
 
         return output

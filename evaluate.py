@@ -4,7 +4,7 @@ import os
 import cv2
 import numpy as np
 import torch
-from catalyst.dl.utils import UtilsFactory
+from catalyst.dl.utils import unpack_checkpoint
 
 from common.dataset import read_inria_rgb
 from common.factory import get_model, predict
@@ -56,7 +56,7 @@ def main():
         checkpoint["epoch_metrics"]["valid"]["accuracy"],
     )
 
-    UtilsFactory.unpack_checkpoint(checkpoint, model=model)
+    unpack_checkpoint(checkpoint, model=model)
 
     model = model.cuda().eval()
 

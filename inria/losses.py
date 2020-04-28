@@ -3,13 +3,12 @@ from typing import Optional, Dict
 import torch
 import torch.nn.functional as F
 from pytorch_toolbelt.losses import *
-
-__all__ = ["get_loss", "AdaptiveMaskLoss2d"]
-
 from torch import nn
 from torch.nn import KLDivLoss
 
 from inria.dataset import INPUT_MASK_KEY, INPUT_MASK_WEIGHT_KEY
+
+__all__ = ["get_loss", "AdaptiveMaskLoss2d"]
 
 
 class AdaptiveMaskLoss2d(nn.Module):
