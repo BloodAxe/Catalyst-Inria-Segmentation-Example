@@ -12,5 +12,5 @@ def test_models(model_name):
     x = maybe_cuda(torch.rand((2, 3, 256, 256)))
     output = model(x)
     print(model_name, count_parameters(model))
-    for key, value in output.item():
+    for key, value in output.items():
         print(key, value.size(), value.mean(), value.std())
