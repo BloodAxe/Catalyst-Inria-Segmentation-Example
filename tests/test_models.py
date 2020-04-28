@@ -1,37 +1,16 @@
+import pytest
 import torch
+from pytorch_toolbelt.utils.torch_utils import maybe_cuda, count_parameters
 
-from inria.dataset import OUTPUT_MASK_KEY
-from inria.models.hg import hg8
-from inria.models.unet import hrnet18_unet64
-from inria.models.runet import hrnet18_runet64
-from pytorch_toolbelt.utils.torch_utils import count_parameters
+from inria.models import get_model, MODEL_REGISTRY
 
 
 @torch.no_grad()
-def test_resnet34_rfpncat128():
-    net = resnet34_rfpncat128().cuda().eval()
-    input = torch.rand((2, 3, 256, 256)).cuda()
-    output = net(input)
-    mask = output[OUTPUT_MASK_KEY]
-    print(mask.mean(), mask.std())
-
-
-@torch.no_grad()
-def test_hrnet18_runet64():
-    net = hrnet18_runet64().eval()
-    print(net)
-    print(count_parameters(net))
-    input = torch.rand((2, 3, 256, 256))
-    output = net(input)
-    mask = output[OUTPUT_MASK_KEY]
-
-
-@torch.no_grad()
-def test_hg8():
-    net = hg8().eval()
-
-    print(net)
-    print(count_parameters(net))
-    input = torch.rand((2, 3, 256, 256))
-    output = net(input)
-    mask = output[OUTPUT_MASK_KEY]
+@pytest.mark.parametrize("model_name", MODEL_REGISTRY.keys())
+def test_models(model_name):
+    model = maybe_cuda(get_model(model_name, pretrained=False).eval())
+    x = maybe_cuda(torch.rand((2, 3, 256, 256)))
+    output = model(x)
+    print(model_name, count_parameters(model))
+    for key, value in output.items():
+        print(key, value.size(), value.mean(), value.std())

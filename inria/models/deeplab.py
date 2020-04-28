@@ -1,8 +1,6 @@
-from pytorch_toolbelt.inference.functional import pad_image_tensor, unpad_image_tensor
 from pytorch_toolbelt.modules import ABN
+from pytorch_toolbelt.modules import decoders as D
 from pytorch_toolbelt.modules import encoders as E
-from pytorch_toolbelt.modules.decoders import DeeplabV3Decoder
-from pytorch_toolbelt.modules.encoders import EncoderModule
 from torch import nn
 from torch.nn import functional as F
 
@@ -14,7 +12,7 @@ __all__ = ["DeeplabV3SegmentationModel", "resnet34_deeplab128", "seresnext101_de
 class DeeplabV3SegmentationModel(nn.Module):
     def __init__(
         self,
-        encoder: EncoderModule,
+        encoder: E.EncoderModule,
         num_classes: int,
         dropout=0.25,
         abn_block=ABN,
@@ -25,7 +23,7 @@ class DeeplabV3SegmentationModel(nn.Module):
         super().__init__()
         self.encoder = encoder
 
-        self.decoder = DeeplabV3Decoder(
+        self.decoder = D.DeeplabV3Decoder(
             feature_maps=encoder.output_filters,
             output_stride=encoder.output_strides[-1],
             num_classes=num_classes,
@@ -38,7 +36,6 @@ class DeeplabV3SegmentationModel(nn.Module):
         self.full_size_mask = full_size_mask
 
     def forward(self, x):
-        x, pad = pad_image_tensor(x, 32)
         enc_features = self.encoder(x)
 
         # Decode mask
@@ -46,7 +43,6 @@ class DeeplabV3SegmentationModel(nn.Module):
 
         if self.full_size_mask:
             mask = F.interpolate(mask, size=x.size()[2:], mode="bilinear", align_corners=False)
-            mask = unpad_image_tensor(mask, pad)
 
         output = {OUTPUT_MASK_KEY: mask, OUTPUT_MASK_32_KEY: dsv}
 

@@ -11,6 +11,8 @@ from torch import nn
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
+from inria.dataset import OUTPUT_MASK_KEY
+
 
 class InMemoryDataset(Dataset):
     def __init__(self, data: List[Dict], transform: A.Compose):
@@ -54,7 +56,14 @@ def predict(model: nn.Module, image: np.ndarray, image_size, normalize=A.Normali
         {"image": patch, "coords": np.array(coords, dtype=np.int)}
         for (patch, coords) in zip(patches, tile_slicer.crops)
     )
-    for batch in DataLoader(InMemoryDataset(data, transform), pin_memory=True, batch_size=batch_size):
+    for batch in DataLoader(
+        InMemoryDataset(data, transform),
+        pin_memory=True,
+        batch_size=batch_size,
+        num_workers=4,
+        shuffle=False,
+        drop_last=False,
+    ):
         image = batch["image"].cuda(non_blocking=True)
         coords = batch["coords"]
         mask_batch = model(image)

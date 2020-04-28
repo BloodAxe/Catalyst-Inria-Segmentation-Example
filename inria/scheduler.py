@@ -1,6 +1,11 @@
 from catalyst.contrib.schedulers import OneCycleLRWithWarmup
-from torch.optim.lr_scheduler import ExponentialLR, CyclicLR, MultiStepLR, CosineAnnealingLR, \
-    CosineAnnealingWarmRestarts
+from torch.optim.lr_scheduler import (
+    ExponentialLR,
+    CyclicLR,
+    MultiStepLR,
+    CosineAnnealingLR,
+    CosineAnnealingWarmRestarts,
+)
 
 
 def get_scheduler(scheduler_name: str, optimizer, lr, num_epochs, batches_in_epoch=None):
@@ -11,13 +16,15 @@ def get_scheduler(scheduler_name: str, optimizer, lr, num_epochs, batches_in_epo
         return CosineAnnealingLR(optimizer, num_epochs, eta_min=1e-6)
 
     if scheduler_name.lower() == "cosr":
-        return CosineAnnealingWarmRestarts(optimizer,
-                                           T_0=max(2, num_epochs // 4),
-                                           eta_min=1e-6)
+        return CosineAnnealingWarmRestarts(optimizer, T_0=max(2, num_epochs // 4), eta_min=1e-6)
 
     if scheduler_name.lower() in {"1cycle", "one_cycle"}:
         return OneCycleLRWithWarmup(
-            optimizer, lr_range=(lr, 1e-6), num_steps=batches_in_epoch * num_epochs, warmup_fraction=0.05, decay_fraction=0.1
+            optimizer,
+            lr_range=(lr, 1e-6),
+            num_steps=batches_in_epoch * num_epochs,
+            warmup_fraction=0.05,
+            decay_fraction=0.1,
         )
 
     if scheduler_name.lower() == "exp":

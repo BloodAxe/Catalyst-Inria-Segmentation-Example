@@ -11,7 +11,16 @@ from torch.nn import functional as F
 
 from ..dataset import OUTPUT_MASK_KEY
 
-__all__ = ["seresnext50_unet64", "hrnet18_unet64", "hrnet34_unet64", "hrnet48_unet64", "densenet121_unet64"]
+__all__ = [
+    "densenet121_unet128",
+    "densenet121_unet64",
+    "hrnet18_unet64",
+    "hrnet34_unet64",
+    "hrnet48_unet64",
+    "seresnext50_unet64",
+    "sexresnet50_unet128",
+    "xresnet50_unet128",
+]
 
 
 class ConvBottleneck(nn.Module):
@@ -132,8 +141,6 @@ class UnetV2SegmentationModel(nn.Module):
 
         output = {OUTPUT_MASK_KEY: mask}
         return output
-
-
 
 
 class UnetV3SegmentationModel(nn.Module):

@@ -15,15 +15,16 @@ from catalyst.contrib.schedulers import OneCycleLRWithWarmup
 from catalyst.dl import SupervisedRunner, CriterionCallback, OptimizerCallback, SchedulerCallback
 from catalyst.dl.callbacks import CriterionAggregatorCallback
 from catalyst.utils import load_checkpoint, unpack_checkpoint
-from pytorch_toolbelt.optimization.functional import get_lr_decay_parameters
+from pytorch_toolbelt.optimization.functional import get_lr_decay_parameters, get_optimizable_parameters
 from pytorch_toolbelt.utils import fs
 from pytorch_toolbelt.utils.catalyst import (
     ShowPolarBatchesCallback,
     PixelAccuracyCallback,
-    draw_binary_segmentation_predictions,
+    report_checkpoint,
+    clean_checkpoint,
 )
 from pytorch_toolbelt.utils.random import set_manual_seed
-from pytorch_toolbelt.utils.torch_utils import count_parameters, transfer_weights, get_optimizable_parameters
+from pytorch_toolbelt.utils.torch_utils import count_parameters, transfer_weights
 from sklearn.utils import compute_sample_weight
 from torch import nn
 from torch.optim.lr_scheduler import CyclicLR
@@ -49,10 +50,10 @@ from inria.factory import predict
 from inria.losses import get_loss, AdaptiveMaskLoss2d
 from inria.metric import JaccardMetricPerImage, OptimalThreshold
 from inria.models import get_model
+from inria.models.hg import SupervisedHGSegmentationModel
 from inria.optim import get_optimizer
 from inria.pseudo import BCEOnlinePseudolabelingCallback2d
 from inria.scheduler import get_scheduler
-from inria.utils import clean_checkpoint, report_checkpoint
 from inria.visualization import draw_inria_predictions
 
 
@@ -368,10 +369,29 @@ def main():
             ):
                 criterion_callback = CriterionCallback(
                     prefix="seg_loss_dsv/" + dsv_input,
-                    input_key=OUTPUT_MASK_KEY,
+                    input_key=INPUT_MASK_KEY,
                     output_key=dsv_input,
                     criterion_key=criterions,
                     multiplier=1.0,
+                )
+                callbacks.append(criterion_callback)
+                losses.append(criterion_callback.prefix)
+
+        if isinstance(model, SupervisedHGSegmentationModel):
+            print("Using Hourglass DSV")
+            dsv_loss_name = "kl"
+
+            criterions_dict["dsv"] = get_loss(dsv_loss_name, ignore_index=ignore_index)
+            num_supervision_inputs = model.encoder.num_blocks - 1
+            dsv_outputs = [OUTPUT_MASK_4_KEY + "_after_hg_" + str(i) for i in range(num_supervision_inputs)]
+
+            for i, dsv_input in enumerate(dsv_outputs):
+                criterion_callback = CriterionCallback(
+                    prefix="supervision/" + dsv_input,
+                    input_key=INPUT_MASK_KEY,
+                    output_key=dsv_input,
+                    criterion_key="dsv",
+                    multiplier=(i + 1) / num_supervision_inputs,
                 )
                 callbacks.append(criterion_callback)
                 losses.append(criterion_callback.prefix)
@@ -391,24 +411,24 @@ def main():
             callbacks += [SchedulerCallback(mode="batch")]
 
         print("Train session    :", checkpoint_prefix)
-        print("\tFP16 mode      :", fp16)
-        print("\tFast mode      :", args.fast)
-        print("\tTrain mode     :", train_mode)
-        print("\tEpochs         :", num_epochs)
-        print("\tWorkers        :", num_workers)
-        print("\tData dir       :", data_dir)
-        print("\tLog dir        :", log_dir)
-        print("\tAugmentations  :", augmentations)
-        print("\tTrain size     :", len(loaders["train"]), len(train_ds))
-        print("\tValid size     :", len(loaders["valid"]), len(valid_ds))
+        print("  FP16 mode      :", fp16)
+        print("  Fast mode      :", args.fast)
+        print("  Train mode     :", train_mode)
+        print("  Epochs         :", num_epochs)
+        print("  Workers        :", num_workers)
+        print("  Data dir       :", data_dir)
+        print("  Log dir        :", log_dir)
+        print("  Augmentations  :", augmentations)
+        print("  Train size     :", len(loaders["train"]), len(train_ds))
+        print("  Valid size     :", len(loaders["valid"]), len(valid_ds))
         print("Model            :", model_name)
-        print("\tParameters     :", count_parameters(model))
-        print("\tImage size     :", image_size)
+        print("  Parameters     :", count_parameters(model))
+        print("  Image size     :", image_size)
         print("Optimizer        :", optimizer_name)
-        print("\tLearning rate  :", learning_rate)
-        print("\tBatch size     :", batch_size)
-        print("\tCriterion      :", criterions)
-        print("\tUse weight mask:", need_weight_mask)
+        print("  Learning rate  :", learning_rate)
+        print("  Batch size     :", batch_size)
+        print("  Criterion      :", criterions)
+        print("  Use weight mask:", need_weight_mask)
 
         # model training
         runner.train(

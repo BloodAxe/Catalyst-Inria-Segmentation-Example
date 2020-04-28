@@ -35,18 +35,22 @@ def safe_augmentations():
 
 
 def light_augmentations():
-    return A.Compose([
-        A.HorizontalFlip(),
-        A.RandomBrightnessContrast(),
-        A.OneOf([
-            A.ShiftScaleRotate(scale_limit=0.05, rotate_limit=15, border_mode=cv2.BORDER_CONSTANT),
-            A.IAAAffine(),
-            A.IAAPerspective(),
-            A.NoOp()
-        ]),
-        A.HueSaturationValue(),
-        A.Normalize()
-    ])
+    return A.Compose(
+        [
+            A.HorizontalFlip(),
+            A.RandomBrightnessContrast(),
+            A.OneOf(
+                [
+                    A.ShiftScaleRotate(scale_limit=0.05, rotate_limit=15, border_mode=cv2.BORDER_CONSTANT),
+                    A.IAAAffine(),
+                    A.IAAPerspective(),
+                    A.NoOp(),
+                ]
+            ),
+            A.HueSaturationValue(),
+            A.Normalize(),
+        ]
+    )
 
 
 def medium_augmentations():
@@ -73,8 +77,11 @@ def hard_augmentations():
             A.RandomRotate90(),
             A.Transpose(),
             A.RandomGridShuffle(),
-            A.ShiftScaleRotate(
-                scale_limit=0.1, rotate_limit=45, border_mode=cv2.BORDER_CONSTANT, mask_value=0, value=0
+            A.OneOf(
+                [
+                    A.ShiftScaleRotate(scale_limit=0.2, rotate_limit=45, border_mode=cv2.BORDER_CONSTANT),
+                    A.IAAAffine(shear=20, mode="constant"),
+                ]
             ),
             A.ElasticTransform(border_mode=cv2.BORDER_CONSTANT, alpha_affine=5, mask_value=0, value=0),
             # Add occasion blur
