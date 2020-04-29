@@ -8,6 +8,7 @@ import os
 from datetime import datetime
 from functools import partial
 
+import catalyst
 import cv2
 import numpy as np
 import torch
@@ -133,6 +134,10 @@ def main():
     extra_data_xview2 = args.data_dir_xview2
 
     set_manual_seed(args.seed)
+    set_manual_seed(args.seed)
+    catalyst.utils.set_global_seed(args.seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
 
     run_train = num_epochs > 0
     need_weight_mask = any(c[0] == "wbce" for c in criterions)
@@ -427,8 +432,8 @@ def main():
         print("  Data dir       :", data_dir)
         print("  Log dir        :", log_dir)
         print("  Augmentations  :", augmentations)
-        print("  Train size     :", len(loaders["train"]), len(train_ds))
-        print("  Valid size     :", len(loaders["valid"]), len(valid_ds))
+        print("  Train size     :", "batches", len(loaders["train"]), "dataset", len(train_ds))
+        print("  Valid size     :", "batches", len(loaders["valid"]), "dataset", len(valid_ds))
         print("Model            :", model_name)
         print("  Parameters     :", count_parameters(model))
         print("  Image size     :", image_size)
