@@ -64,9 +64,11 @@ def main():
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument("--fast", action="store_true")
     parser.add_argument(
-        "-dd", "--data-dir", type=str,
+        "-dd",
+        "--data-dir",
+        type=str,
         help="Data directory for INRIA sattelite dataset",
-        default=os.environ.get("INRIA_DATA_DIR")
+        default=os.environ.get("INRIA_DATA_DIR"),
     )
     parser.add_argument(
         "-dd-xview2", "--data-dir-xview2", type=str, required=False, help="Data directory for external xView2 dataset"
@@ -371,7 +373,7 @@ def main():
             criterions_dict[criterions] = AdaptiveMaskLoss2d(get_loss(dsv_loss_name, ignore_index=ignore_index))
 
             for i, dsv_input in enumerate(
-                    [OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY, OUTPUT_MASK_32_KEY]
+                [OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY, OUTPUT_MASK_32_KEY]
             ):
                 criterion_callback = CriterionCallback(
                     prefix="seg_loss_dsv/" + dsv_input,
@@ -470,4 +472,5 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    with torch.autograd.detect_anomaly():
+        main()
