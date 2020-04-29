@@ -13,12 +13,11 @@ MODEL_REGISTRY = {
     # FPN family using summation
     "seresnext101_fpnsum256": fpn.seresnext101_fpnsum256,
     # UNet
-    "seresnext50_unet64": unet.seresnext50_unet64,
-    "hrnet18_unet64": unet.hrnet18_unet64,
-    "hrnet34_unet64": unet.hrnet34_unet64,
-    "hrnet48_unet64": unet.hrnet48_unet64,
-    "densenet121_unet64": unet.densenet121_unet64,
-    "densenet121_unet128": unet.densenet121_unet128,
+    "resnet18_unet32": unet.resnet18_unet32,
+    "resnet34_unet32": unet.resnet34_unet32,
+    "resnet50_unet32": unet.resnet50_unet32,
+    "resnet101_unet64": unet.resnet101_unet64,
+    "resnet152_unet64": unet.resnet152_unet64,
     # Deeplab
     "resnet34_deeplab128": deeplab.resnet34_deeplab128,
     "seresnext101_deeplab128": deeplab.seresnext101_deeplab256,

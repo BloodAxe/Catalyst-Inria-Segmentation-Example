@@ -60,7 +60,8 @@ def main():
 
     model = get_model(args.model)
     unpack_checkpoint(checkpoint, model=model)
-    threshold = checkpoint["epoch_metrics"]["valid"].get("optimized_jaccard/threshold", 0.5)
+    # threshold = checkpoint["epoch_metrics"]["valid"].get("optimized_jaccard/threshold", 0.5)
+    threshold = 0.5
     print("Using threshold", threshold)
 
     model = nn.Sequential(PickModelOutput(model, OUTPUT_MASK_KEY), nn.Sigmoid())

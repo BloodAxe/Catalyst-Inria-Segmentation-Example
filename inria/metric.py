@@ -99,7 +99,7 @@ class OptimalThreshold(Callback):
         self.output_key = output_key
         self.input_key = input_key
         self.image_id_key = image_id_key
-        self.thresholds = np.arange(0, 1, 0.01)
+        self.thresholds = np.arange(0.3, 0.7, 0.01)
         self.scores_per_image = defaultdict(
             lambda: {"intersection": np.zeros_like(self.thresholds), "union": np.zeros_like(self.thresholds)}
         )

@@ -64,7 +64,9 @@ def main():
     parser.add_argument("-v", "--verbose", action="store_true")
     parser.add_argument("--fast", action="store_true")
     parser.add_argument(
-        "-dd", "--data-dir", type=str, required=True, help="Data directory for INRIA sattelite dataset"
+        "-dd", "--data-dir", type=str,
+        help="Data directory for INRIA sattelite dataset",
+        default=os.environ.get("INRIA_DATA_DIR")
     )
     parser.add_argument(
         "-dd-xview2", "--data-dir-xview2", type=str, required=False, help="Data directory for external xView2 dataset"
@@ -100,9 +102,10 @@ def main():
     parser.add_argument("--dsv", action="store_true")
 
     args = parser.parse_args()
-    set_manual_seed(args.seed)
 
     data_dir = args.data_dir
+    if data_dir is None:
+        raise ValueError("--data-dir must be set")
     num_workers = args.workers
     num_epochs = args.epochs
     batch_size = args.batch_size
@@ -126,6 +129,8 @@ def main():
     accumulation_steps = args.accumulation_steps
     weight_decay = args.weight_decay
     extra_data_xview2 = args.data_dir_xview2
+
+    set_manual_seed(args.seed)
 
     run_train = num_epochs > 0
     need_weight_mask = any(c[0] == "wbce" for c in criterions)
@@ -199,6 +204,7 @@ def main():
         image_size=image_size,
         augmentation=augmentations,
         train_mode=train_mode,
+        buildings_only=(train_mode == "tiles"),
         fast=fast,
         need_weight_mask=need_weight_mask,
     )
@@ -281,7 +287,7 @@ def main():
         del optimizer, loaders
 
         best_checkpoint = os.path.join(log_dir, "warmup", "checkpoints", "best.pth")
-        model_checkpoint = os.path.join(log_dir, "warmup", "checkpoints", f"{checkpoint_prefix}_warmup.pth")
+        model_checkpoint = os.path.join(log_dir, f"{checkpoint_prefix}_warmup.pth")
         clean_checkpoint(best_checkpoint, model_checkpoint)
 
         torch.cuda.empty_cache()
@@ -365,7 +371,7 @@ def main():
             criterions_dict[criterions] = AdaptiveMaskLoss2d(get_loss(dsv_loss_name, ignore_index=ignore_index))
 
             for i, dsv_input in enumerate(
-                [OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY, OUTPUT_MASK_32_KEY]
+                    [OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY, OUTPUT_MASK_32_KEY]
             ):
                 criterion_callback = CriterionCallback(
                     prefix="seg_loss_dsv/" + dsv_input,
@@ -450,7 +456,7 @@ def main():
         # Training is finished. Let's run predictions using best checkpoint weights
         best_checkpoint = os.path.join(log_dir, "main", "checkpoints", "best.pth")
 
-        model_checkpoint = os.path.join(log_dir, "main", "checkpoints", f"{checkpoint_prefix}.pth")
+        model_checkpoint = os.path.join(log_dir, f"{checkpoint_prefix}.pth")
         clean_checkpoint(best_checkpoint, model_checkpoint)
 
         unpack_checkpoint(torch.load(model_checkpoint), model=model)

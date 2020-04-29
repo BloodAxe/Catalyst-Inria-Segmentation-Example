@@ -1,3 +1,5 @@
+import warnings
+
 from catalyst.contrib.schedulers import OneCycleLRWithWarmup
 from torch.optim.lr_scheduler import (
     ExponentialLR,
@@ -6,6 +8,27 @@ from torch.optim.lr_scheduler import (
     CosineAnnealingLR,
     CosineAnnealingWarmRestarts,
 )
+
+
+class CosineAnnealingWarmRestartsWithDecay(CosineAnnealingWarmRestarts):
+    def __init__(self, optimizer, T_0, T_mult=1, eta_min=0, last_epoch=-1, gamma=0.9):
+        super().__init__(optimizer, T_0, T_mult, eta_min, last_epoch)
+        self.gamma = gamma
+
+    def get_lr(self):
+        if not self._get_lr_called_within_step:
+            warnings.warn(
+                "To get the last learning rate computed by the scheduler, " "please use `get_last_lr()`.",
+                DeprecationWarning,
+            )
+
+        return [
+            self.eta_min
+            + (base_lr * self.gamma ** self.last_epoch - self.eta_min)
+            * (1 + math.cos(math.pi * self.T_cur / self.T_i))
+            / 2
+            for base_lr in self.base_lrs
+        ]
 
 
 def get_scheduler(scheduler_name: str, optimizer, lr, num_epochs, batches_in_epoch=None):
@@ -17,6 +40,9 @@ def get_scheduler(scheduler_name: str, optimizer, lr, num_epochs, batches_in_epo
 
     if scheduler_name.lower() == "cosr":
         return CosineAnnealingWarmRestarts(optimizer, T_0=max(2, num_epochs // 4), eta_min=1e-6)
+
+    if scheduler_name.lower() == "cosrd":
+        return CosineAnnealingWarmRestartsWithDecay(optimizer, T_0=max(2, num_epochs // 6), gamma=0.96, eta_min=1e-6)
 
     if scheduler_name.lower() in {"1cycle", "one_cycle"}:
         return OneCycleLRWithWarmup(
