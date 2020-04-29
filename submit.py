@@ -67,13 +67,13 @@ def main():
 
     if args.tta == "fliplr":
         model = TTAWrapper(model, fliplr_image2mask)
-
-    if args.tta == "flipscale":
+    elif args.tta == "flipscale":
         model = TTAWrapper(model, fliplr_image2mask)
         model = MultiscaleTTAWrapper(model, size_offsets=[-128, -64, 64, 128])
-
-    if args.tta == "d4":
+    elif args.tta == "d4":
         model = TTAWrapper(model, d4_image2mask)
+    else:
+        pass
 
     model = model.cuda()
     if torch.cuda.device_count() > 1:
