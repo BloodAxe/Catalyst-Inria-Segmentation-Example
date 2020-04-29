@@ -49,11 +49,11 @@ class DeeplabV3SegmentationModel(nn.Module):
         return output
 
 
-def resnet34_deeplab128(num_classes=1, dropout=0.0):
-    encoder = E.Resnet34Encoder()
+def resnet34_deeplab128(num_classes=1, dropout=0.0, pretrained=True):
+    encoder = E.Resnet34Encoder(pretrained=pretrained)
     return DeeplabV3SegmentationModel(encoder, num_classes=num_classes, high_level_bottleneck=128, dropout=dropout)
 
 
-def seresnext101_deeplab256(num_classes=1, dropout=0.0):
-    encoder = E.SEResNeXt101Encoder()
+def seresnext101_deeplab256(num_classes=1, dropout=0.0, pretrained=True):
+    encoder = E.SEResNeXt101Encoder(pretrained=pretrained)
     return DeeplabV3SegmentationModel(encoder, num_classes=num_classes, high_level_bottleneck=256, dropout=dropout)

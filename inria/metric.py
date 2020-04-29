@@ -99,7 +99,7 @@ class OptimalThreshold(Callback):
         self.output_key = output_key
         self.input_key = input_key
         self.image_id_key = image_id_key
-        self.thresholds = np.arange(0.3, 0.7, 0.01)
+        self.thresholds = torch.arange(0.3, 0.7, 0.01).view(1, 1, -1).detach()
         self.scores_per_image = defaultdict(
             lambda: {"intersection": np.zeros_like(self.thresholds), "union": np.zeros_like(self.thresholds)}
         )
@@ -109,22 +109,21 @@ class OptimalThreshold(Callback):
             lambda: {"intersection": np.zeros_like(self.thresholds), "union": np.zeros_like(self.thresholds)}
         )
 
+    @torch.no_grad()
     def on_batch_end(self, state: RunnerState):
         image_id = state.input[self.image_id_key]
         outputs = state.output[self.output_key].detach().sigmoid()
         targets = state.input[self.input_key].detach()
 
         # Flatten images for easy computing IoU
-        outputs = outputs.view(outputs.size(0), -1)
-        targets = targets.view(targets.size(0), -1)
+        outputs = outputs.view(outputs.size(0), -1, 1) > self.thresholds.to(outputs.dtype).to(outputs.device)
+        targets = targets.view(targets.size(0), -1) == 1
 
         for i, threshold in enumerate(self.thresholds):
-
             # Binarize outputs
-            outputs_i = (outputs > threshold).float()
-
-            intersection = torch.sum(targets * outputs_i, dim=1)
-            union = torch.sum(targets, dim=1) + torch.sum(outputs_i, dim=1)
+            outputs_i = outputs[..., i]
+            intersection = torch.sum(targets & outputs_i, dim=1)
+            union = torch.sum(targets | outputs_i, dim=1)
 
             for img_id, img_intersection, img_union in zip(image_id, intersection, union):
                 self.scores_per_image[img_id]["intersection"][i] += float(img_intersection)

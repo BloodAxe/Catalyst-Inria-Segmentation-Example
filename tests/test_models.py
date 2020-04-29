@@ -9,7 +9,7 @@ from inria.models import get_model, MODEL_REGISTRY
 @pytest.mark.parametrize("model_name", MODEL_REGISTRY.keys())
 def test_models(model_name):
     model = maybe_cuda(get_model(model_name, pretrained=False).eval())
-    x = maybe_cuda(torch.rand((2, 3, 256, 256)))
+    x = maybe_cuda(torch.rand((2, 3, 512, 512)))
     output = model(x)
     print(model_name, count_parameters(model))
     for key, value in output.items():
