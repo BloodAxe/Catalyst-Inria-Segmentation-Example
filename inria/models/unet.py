@@ -39,6 +39,7 @@ class UnetSegmentationModel(nn.Module):
         self.decoder = UNetDecoder(
             feature_maps=encoder.channels,
             decoder_features=unet_channels,
+            upsample_block=nn.UpsamplingNearest2d
         )
 
         self.mask = nn.Sequential(OrderedDict([
