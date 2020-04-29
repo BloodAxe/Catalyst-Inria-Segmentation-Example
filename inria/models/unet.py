@@ -102,7 +102,7 @@ def resnet50_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=Tru
     )
 
 
-def resnet101_unet64(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
+def resnet101_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
     encoder = E.Resnet101Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
@@ -115,7 +115,7 @@ def resnet101_unet64(input_channels=3, num_classes=1, dropout=0.0, pretrained=Tr
     )
 
 
-def resnet152_unet64(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
+def resnet152_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
     encoder = E.Resnet152Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
