@@ -1,6 +1,6 @@
 from torch import nn
 
-from . import fpn, unet, deeplab, hrnet, hg
+from . import fpn, unet, deeplab, hrnet, hg, can
 
 __all__ = ["get_model", "MODEL_REGISTRY"]
 
@@ -30,6 +30,8 @@ MODEL_REGISTRY = {
     "hg4": hg.hg4,
     "shg4": hg.shg4,
     "shg8": hg.shg8,
+    # CAN
+    "seresnext50_can": can.seresnext50_can,
 }
 
 

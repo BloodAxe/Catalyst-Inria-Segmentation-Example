@@ -66,8 +66,8 @@ def predict(model: nn.Module, image: np.ndarray, image_size, normalize=A.Normali
     ):
         image = batch["image"].cuda(non_blocking=True)
         coords = batch["coords"]
-        mask_batch = model(image)
-        tile_merger.integrate_batch(mask_batch, coords)
+        output = model(image)
+        tile_merger.integrate_batch(output[OUTPUT_MASK_KEY], coords)
 
     mask = tile_merger.merge()
 

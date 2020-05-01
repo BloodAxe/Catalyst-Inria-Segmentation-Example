@@ -1,0 +1,1 @@
+python fit_predict.py -b 40 -m seresnext50_can -s cos -lr 1e-4 -a hard -v -e 100 -w 4 -e 50 -l bce 1 --train-mode tiles --show

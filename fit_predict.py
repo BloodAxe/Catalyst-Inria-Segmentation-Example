@@ -20,6 +20,8 @@ from pytorch_toolbelt.optimization.functional import get_lr_decay_parameters, ge
 from pytorch_toolbelt.utils import fs
 from pytorch_toolbelt.utils.catalyst import (
     ShowPolarBatchesCallback,
+    HyperParametersCallback,
+    BestMetricCheckpointCallback,
     PixelAccuracyCallback,
     report_checkpoint,
     clean_checkpoint,
@@ -160,7 +162,7 @@ def main():
         report_checkpoint(checkpoint)
 
     runner = SupervisedRunner(input_key=INPUT_IMAGE_KEY, output_key=None, device="cuda")
-    main_metric = "optimized_jaccard"
+    main_metric = "jaccard"
     cmd_args = vars(args)
 
     current_time = datetime.now().strftime("%b%d_%H_%M")
@@ -193,7 +195,17 @@ def main():
         PixelAccuracyCallback(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY),
         JaccardMetricPerImage(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY, prefix="jaccard"),
         OptimalThreshold(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY, prefix="optimized_jaccard"),
-        # OutputDistributionCallback(output_key=OUTPUT_MASK_KEY, activation=torch.sigmoid),
+        BestMetricCheckpointCallback(target_metric="optimized_jaccard", target_metric_minimize=False),
+        HyperParametersCallback(
+            hparam_dict={
+                "model": model_name,
+                "scheduler": scheduler_name,
+                "optimizer": optimizer_name,
+                "augmentations": augmentations,
+                "size": args.size,
+                "weight_decay": weight_decay,
+            }
+        ),
     ]
 
     if show:

@@ -3,6 +3,7 @@ from collections import defaultdict
 import numpy as np
 import torch
 from catalyst.dl import Callback, RunnerState, CallbackOrder
+from pytorch_toolbelt.utils import to_numpy
 from pytorch_toolbelt.utils.catalyst import get_tensorboard_logger
 
 
@@ -99,15 +100,14 @@ class OptimalThreshold(Callback):
         self.output_key = output_key
         self.input_key = input_key
         self.image_id_key = image_id_key
-        self.thresholds = torch.arange(0.3, 0.7, 0.01).view(1, 1, -1).detach()
-        self.scores_per_image = defaultdict(
-            lambda: {"intersection": np.zeros_like(self.thresholds), "union": np.zeros_like(self.thresholds)}
-        )
+        self.thresholds = torch.arange(0.3, 0.7, 0.01).detach()
+
+        n = len(self.thresholds)
+        self.scores_per_image = defaultdict(lambda: {"intersection": np.zeros(n), "union": np.zeros(n)})
 
     def on_loader_start(self, state: RunnerState):
-        self.scores_per_image = defaultdict(
-            lambda: {"intersection": np.zeros_like(self.thresholds), "union": np.zeros_like(self.thresholds)}
-        )
+        n = len(self.thresholds)
+        self.scores_per_image = defaultdict(lambda: {"intersection": np.zeros(n), "union": np.zeros(n)})
 
     @torch.no_grad()
     def on_batch_end(self, state: RunnerState):
@@ -116,7 +116,7 @@ class OptimalThreshold(Callback):
         targets = state.input[self.input_key].detach()
 
         # Flatten images for easy computing IoU
-        outputs = outputs.view(outputs.size(0), -1, 1) > self.thresholds.to(outputs.dtype).to(outputs.device)
+        outputs = outputs.view(outputs.size(0), -1, 1) > self.thresholds.to(outputs.dtype).to(outputs.device).view(1, 1, -1)
         targets = targets.view(targets.size(0), -1) == 1
 
         for i, threshold in enumerate(self.thresholds):
@@ -137,15 +137,16 @@ class OptimalThreshold(Callback):
         for image_id, values in self.scores_per_image.items():
             intersection = values["intersection"]
             union = values["union"]
-            metric = intersection / (union - intersection + eps)
+            metric = intersection / (union + eps)
             ious_per_image.append(metric)
 
+        thresholds = to_numpy(self.thresholds)
         iou = np.mean(ious_per_image, axis=0)
-        assert len(iou) == len(self.thresholds)
+        assert len(iou) == len(thresholds)
 
         threshold_index = np.argmax(iou)
         iou_at_threshold = iou[threshold_index]
-        threshold_value = self.thresholds[threshold_index]
+        threshold_value = thresholds[threshold_index]
 
         state.metrics.epoch_values[state.loader_name][self.prefix + "/" + "threshold"] = float(threshold_value)
         state.metrics.epoch_values[state.loader_name][self.prefix] = float(iou_at_threshold)
