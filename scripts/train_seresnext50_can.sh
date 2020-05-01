@@ -1,3 +1,3 @@
-export INRIA_DATA_DIR="/home/bloodaxe/data/AerialImageDataset"
+export INRIA_DATA_DIR="/home/bloodaxe/datasets/AerialImageDataset"
 #python fit_predict.py -b 40 -m seresnext50_can -s cos -lr 1e-4 -a hard -v -e 10 -e 50 -l bce 1 --train-mode tiles --show
 python fit_predict.py -b 40 -m seresnext50_can -s cosrd -d 0.25 -lr 4e-5 -a hard -v -e 100 -w 16 -e 50 -l bce 1 --train-mode tiles --show -c /home/bloodaxe/develop/Catalyst-Inria-Segmentation-Example/runs/May01_12_45_seresnext50_can/main/checkpoints/best.pth
