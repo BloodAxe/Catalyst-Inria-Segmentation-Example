@@ -215,8 +215,12 @@ def main():
             image_id_key=INPUT_IMAGE_ID_KEY,
             targets_key=INPUT_MASK_KEY,
             outputs_key=OUTPUT_MASK_KEY,
+            max_images=16
         )
-        default_callbacks += [ShowPolarBatchesCallback(visualize_inria_predictions, metric="accuracy", minimize=False)]
+        default_callbacks += [
+            ShowPolarBatchesCallback(visualize_inria_predictions, metric="accuracy", minimize=False),
+            ShowPolarBatchesCallback(visualize_inria_predictions, metric="loss", minimize=True)
+        ]
 
     train_ds, valid_ds, train_sampler = get_datasets(
         data_dir=data_dir,
