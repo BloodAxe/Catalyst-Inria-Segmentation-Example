@@ -1,7 +1,8 @@
 from collections import OrderedDict
+from functools import partial
 from typing import Union, List, Dict
 
-from pytorch_toolbelt.modules import conv1x1
+from pytorch_toolbelt.modules import conv1x1, UnetBlock, ACT_RELU, ABN, ACT_SWISH
 from pytorch_toolbelt.modules import encoders as E
 from pytorch_toolbelt.modules.decoders import UNetDecoder
 from pytorch_toolbelt.modules.encoders import EncoderModule
@@ -20,31 +21,37 @@ __all__ = [
     "densenet121_unet32",
     "densenet161_unet32",
     "densenet169_unet32",
-    "densenet201_unet32"
+    "densenet201_unet32",
+    "b0_unet32",
+    "b5_unet32",
+    "b5_unet32_relu",
 ]
 
 
 class UnetSegmentationModel(nn.Module):
     def __init__(
-            self,
-            encoder: EncoderModule,
-            unet_channels: Union[int, List[int]],
-            num_classes: int = 1,
-            dropout=0.25,
-            full_size_mask=True,
+        self,
+        encoder: EncoderModule,
+        unet_channels: Union[int, List[int]],
+        num_classes: int = 1,
+        dropout=0.25,
+        full_size_mask=True,
+        activation=ACT_RELU,
     ):
         super().__init__()
         self.encoder = encoder
 
+        abn_block = partial(ABN, activation=activation)
         self.decoder = UNetDecoder(
             feature_maps=encoder.channels,
             decoder_features=unet_channels,
-            upsample_block=nn.UpsamplingNearest2d
+            unet_block=partial(UnetBlock, abn_block=abn_block),
+            upsample_block=nn.UpsamplingNearest2d,
         )
 
-        self.mask = nn.Sequential(OrderedDict([
-            ("drop", nn.Dropout2d(dropout)),
-            ("conv", conv1x1(unet_channels[0], num_classes))]))
+        self.mask = nn.Sequential(
+            OrderedDict([("drop", nn.Dropout2d(dropout)), ("conv", conv1x1(unet_channels[0], num_classes))])
+        )
 
         self.full_size_mask = full_size_mask
 
@@ -68,12 +75,7 @@ def resnet18_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=Tru
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
-    return UnetSegmentationModel(
-        encoder,
-        num_classes=num_classes,
-        unet_channels=[32, 64, 128, 256],
-        dropout=dropout,
-    )
+    return UnetSegmentationModel(encoder, num_classes=num_classes, unet_channels=[32, 64, 128, 256], dropout=dropout)
 
 
 def resnet34_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
@@ -81,12 +83,7 @@ def resnet34_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=Tru
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
-    return UnetSegmentationModel(
-        encoder,
-        num_classes=num_classes,
-        unet_channels=[32, 64, 128, 256],
-        dropout=dropout,
-    )
+    return UnetSegmentationModel(encoder, num_classes=num_classes, unet_channels=[32, 64, 128, 256], dropout=dropout)
 
 
 def resnet50_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
@@ -94,12 +91,7 @@ def resnet50_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=Tru
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
-    return UnetSegmentationModel(
-        encoder,
-        num_classes=num_classes,
-        unet_channels=[32, 64, 128, 256],
-        dropout=dropout,
-    )
+    return UnetSegmentationModel(encoder, num_classes=num_classes, unet_channels=[32, 64, 128, 256], dropout=dropout)
 
 
 def resnet101_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
@@ -107,12 +99,7 @@ def resnet101_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=Tr
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
-    return UnetSegmentationModel(
-        encoder,
-        num_classes=num_classes,
-        unet_channels=[32, 64, 128, 256],
-        dropout=dropout,
-    )
+    return UnetSegmentationModel(encoder, num_classes=num_classes, unet_channels=[32, 64, 128, 256], dropout=dropout)
 
 
 def resnet152_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
@@ -120,27 +107,18 @@ def resnet152_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=Tr
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
-    return UnetSegmentationModel(
-        encoder,
-        num_classes=num_classes,
-        unet_channels=[32, 64, 128, 256],
-        dropout=dropout,
-    )
+    return UnetSegmentationModel(encoder, num_classes=num_classes, unet_channels=[32, 64, 128, 256], dropout=dropout)
 
 
 # Densenets
+
 
 def densenet121_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
     encoder = E.DenseNet121Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
-    return UnetSegmentationModel(
-        encoder,
-        num_classes=num_classes,
-        unet_channels=[32, 64, 128, 256],
-        dropout=dropout,
-    )
+    return UnetSegmentationModel(encoder, num_classes=num_classes, unet_channels=[32, 64, 128, 256], dropout=dropout)
 
 
 def densenet161_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
@@ -148,12 +126,7 @@ def densenet161_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
-    return UnetSegmentationModel(
-        encoder,
-        num_classes=num_classes,
-        unet_channels=[32, 64, 128, 256],
-        dropout=dropout,
-    )
+    return UnetSegmentationModel(encoder, num_classes=num_classes, unet_channels=[32, 64, 128, 256], dropout=dropout)
 
 
 def densenet169_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
@@ -161,12 +134,7 @@ def densenet169_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
-    return UnetSegmentationModel(
-        encoder,
-        num_classes=num_classes,
-        unet_channels=[32, 64, 128, 256],
-        dropout=dropout,
-    )
+    return UnetSegmentationModel(encoder, num_classes=num_classes, unet_channels=[32, 64, 128, 256], dropout=dropout)
 
 
 def densenet201_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
@@ -174,27 +142,18 @@ def densenet201_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
-    return UnetSegmentationModel(
-        encoder,
-        num_classes=num_classes,
-        unet_channels=[32, 64, 128, 256],
-        dropout=dropout,
-    )
+    return UnetSegmentationModel(encoder, num_classes=num_classes, unet_channels=[32, 64, 128, 256], dropout=dropout)
 
 
 # HRNet
+
 
 def hrnet18_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
     encoder = E.HRNetV2Encoder18(pretrained=pretrained)
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
-    return UnetSegmentationModel(
-        encoder,
-        num_classes=num_classes,
-        unet_channels=[32, 64, 128, 256],
-        dropout=dropout,
-    )
+    return UnetSegmentationModel(encoder, num_classes=num_classes, unet_channels=[32, 64, 128, 256], dropout=dropout)
 
 
 def hrnet34_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
@@ -202,12 +161,7 @@ def hrnet34_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
-    return UnetSegmentationModel(
-        encoder,
-        num_classes=num_classes,
-        unet_channels=[32, 64, 128, 256],
-        dropout=dropout,
-    )
+    return UnetSegmentationModel(encoder, num_classes=num_classes, unet_channels=[32, 64, 128, 256], dropout=dropout)
 
 
 def hrnet48_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
@@ -215,9 +169,35 @@ def hrnet48_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
+    return UnetSegmentationModel(encoder, num_classes=num_classes, unet_channels=[32, 64, 128, 256], dropout=dropout)
+
+
+# B0-Unet
+def b0_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
+    encoder = E.EfficientNetB0Encoder()
+    if input_channels != 3:
+        encoder.change_input_channels(input_channels)
+
     return UnetSegmentationModel(
-        encoder,
-        num_classes=num_classes,
-        unet_channels=[32, 64, 128, 256],
-        dropout=dropout,
+        encoder, num_classes=num_classes, unet_channels=[32, 64, 128], activation=ACT_SWISH, dropout=dropout
+    )
+
+
+def b5_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
+    encoder = E.EfficientNetB5Encoder()
+    if input_channels != 3:
+        encoder.change_input_channels(input_channels)
+
+    return UnetSegmentationModel(
+        encoder, num_classes=num_classes, unet_channels=[32, 64, 128], activation=ACT_SWISH, dropout=dropout
+    )
+
+
+def b5_unet32_relu(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
+    encoder = E.EfficientNetB5Encoder(activation=ACT_RELU)
+    if input_channels != 3:
+        encoder.change_input_channels(input_channels)
+
+    return UnetSegmentationModel(
+        encoder, num_classes=num_classes, unet_channels=[32, 64, 128], activation=ACT_RELU, dropout=dropout
     )

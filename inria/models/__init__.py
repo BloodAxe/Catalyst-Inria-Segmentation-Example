@@ -18,10 +18,13 @@ MODEL_REGISTRY = {
     "resnet50_unet32": unet.resnet50_unet32,
     "resnet101_unet32": unet.resnet101_unet32,
     "resnet152_unet32": unet.resnet152_unet32,
-
     #
     "densenet121_unet32": unet.densenet121_unet32,
-
+    "densenet201_unet32": unet.densenet201_unet32,
+    # EfficientNet+UNet
+    "b0_unet32": unet.b0_unet32,
+    "b5_unet32": unet.b5_unet32,
+    "b5_unet32_relu": unet.b5_unet32_relu,
     # Deeplab
     "resnet34_deeplab128": deeplab.resnet34_deeplab128,
     "seresnext101_deeplab128": deeplab.seresnext101_deeplab256,
