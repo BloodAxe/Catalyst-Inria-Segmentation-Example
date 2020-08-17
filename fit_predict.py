@@ -2,7 +2,6 @@ from __future__ import absolute_import
 
 import argparse
 import collections
-import gc
 import json
 import os
 from datetime import datetime
@@ -12,11 +11,17 @@ import catalyst
 import cv2
 import numpy as np
 import torch
-from catalyst.contrib.schedulers import OneCycleLRWithWarmup
-from catalyst.dl import SupervisedRunner, CriterionCallback, OptimizerCallback, SchedulerCallback
-from catalyst.dl.callbacks import CriterionAggregatorCallback
+from catalyst.contrib.nn import OneCycleLRWithWarmup
+from catalyst.data import DistributedSamplerWrapper
+from catalyst.dl import (
+    SupervisedRunner,
+    CriterionCallback,
+    OptimizerCallback,
+    SchedulerCallback,
+    MetricAggregationCallback,
+)
 from catalyst.utils import load_checkpoint, unpack_checkpoint
-from pytorch_toolbelt.optimization.functional import get_lr_decay_parameters, get_optimizable_parameters
+from pytorch_toolbelt.optimization.functional import get_optimizable_parameters
 from pytorch_toolbelt.utils import fs
 from pytorch_toolbelt.utils.catalyst import (
     ShowPolarBatchesCallback,
@@ -31,7 +36,7 @@ from pytorch_toolbelt.utils.torch_utils import count_parameters, transfer_weight
 from sklearn.utils import compute_sample_weight
 from torch import nn
 from torch.optim.lr_scheduler import CyclicLR
-from torch.utils.data import DataLoader, WeightedRandomSampler
+from torch.utils.data import DataLoader, WeightedRandomSampler, DistributedSampler
 
 from inria.dataset import (
     read_inria_image,
@@ -51,7 +56,7 @@ from inria.dataset import (
 )
 from inria.factory import predict
 from inria.losses import get_loss, AdaptiveMaskLoss2d
-from inria.metric import JaccardMetricPerImage, OptimalThreshold
+from inria.metric import JaccardMetricPerImage, JaccardMetricPerImageWithOptimalThreshold
 from inria.models import get_model
 from inria.models.hg import SupervisedHGSegmentationModel
 from inria.optim import get_optimizer
@@ -62,6 +67,12 @@ from inria.visualization import draw_inria_predictions
 
 def main():
     parser = argparse.ArgumentParser()
+
+    ###########################################################################################
+    # Distributed-training related stuff
+    parser.add_argument("--local_rank", type=int, default=0)
+    ###########################################################################################
+
     parser.add_argument("-acc", "--accumulation-steps", type=int, default=1, help="Number of batches to process")
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument("-v", "--verbose", action="store_true")
@@ -108,9 +119,37 @@ def main():
 
     args = parser.parse_args()
 
+    args.is_master = args.local_rank == 0
+    args.distributed = False
+    fp16 = args.fp16
+
+    if "WORLD_SIZE" in os.environ:
+        args.distributed = int(os.environ["WORLD_SIZE"]) > 1
+        args.world_size = int(os.environ["WORLD_SIZE"])
+        # args.world_size = torch.distributed.get_world_size()
+
+        print("Initializing init_process_group", args.local_rank)
+
+        torch.cuda.set_device(args.local_rank)
+        # torch.distributed.init_process_group(backend="nccl", init_method="env://")
+        print("Initialized init_process_group", args.local_rank)
+
+    if args.distributed:
+        distributed_params = {"rank": args.local_rank, "syncbn": True}
+        if args.fp16:
+            distributed_params["opt_level"] = "O1"
+    else:
+        distributed_params = fp16
+
+    set_manual_seed(args.seed + args.local_rank)
+    catalyst.utils.set_global_seed(args.seed + args.local_rank)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+
     data_dir = args.data_dir
     if data_dir is None:
         raise ValueError("--data-dir must be set")
+
     num_workers = args.workers
     num_epochs = args.epochs
     batch_size = args.batch_size
@@ -121,7 +160,6 @@ def main():
     fast = args.fast
     augmentations = args.augmentations
     train_mode = args.train_mode
-    fp16 = args.fp16
     scheduler_name = args.scheduler
     experiment = args.experiment
     dropout = args.dropout
@@ -134,12 +172,6 @@ def main():
     accumulation_steps = args.accumulation_steps
     weight_decay = args.weight_decay
     extra_data_xview2 = args.data_dir_xview2
-
-    set_manual_seed(args.seed)
-    set_manual_seed(args.seed)
-    catalyst.utils.set_global_seed(args.seed)
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False
 
     run_train = num_epochs > 0
     need_weight_mask = any(c[0] == "wbce" for c in criterions)
@@ -163,9 +195,8 @@ def main():
 
     runner = SupervisedRunner(input_key=INPUT_IMAGE_KEY, output_key=None, device="cuda")
     main_metric = "jaccard"
-    cmd_args = vars(args)
 
-    current_time = datetime.now().strftime("%b%d_%H_%M")
+    current_time = datetime.now().strftime("%y%m%d_%H_%M")
     checkpoint_prefix = f"{current_time}_{args.model}"
 
     if fp16:
@@ -183,6 +214,9 @@ def main():
     if experiment is not None:
         checkpoint_prefix = experiment
 
+    if args.distributed:
+        checkpoint_prefix += f"_local_rank_{args.local_rank}"
+
     log_dir = os.path.join("runs", checkpoint_prefix)
     os.makedirs(log_dir, exist_ok=False)
 
@@ -194,7 +228,9 @@ def main():
     default_callbacks = [
         PixelAccuracyCallback(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY),
         JaccardMetricPerImage(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY, prefix="jaccard"),
-        OptimalThreshold(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY, prefix="optimized_jaccard"),
+        JaccardMetricPerImageWithOptimalThreshold(
+            input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY, prefix="optimized_jaccard"
+        ),
         BestMetricCheckpointCallback(target_metric="optimized_jaccard", target_metric_minimize=False),
         HyperParametersCallback(
             hparam_dict={
@@ -204,6 +240,7 @@ def main():
                 "augmentations": augmentations,
                 "size": args.size,
                 "weight_decay": weight_decay,
+                "epochs": num_epochs,
             }
         ),
     ]
@@ -215,11 +252,11 @@ def main():
             image_id_key=INPUT_IMAGE_ID_KEY,
             targets_key=INPUT_MASK_KEY,
             outputs_key=OUTPUT_MASK_KEY,
-            max_images=16
+            max_images=16,
         )
         default_callbacks += [
             ShowPolarBatchesCallback(visualize_inria_predictions, metric="accuracy", minimize=False),
-            ShowPolarBatchesCallback(visualize_inria_predictions, metric="loss", minimize=True)
+            ShowPolarBatchesCallback(visualize_inria_predictions, metric="loss", minimize=True),
         ]
 
     train_ds, valid_ds, train_sampler = get_datasets(
@@ -246,75 +283,6 @@ def main():
 
         train_ds = train_ds + extra_train_ds
         print("Using extra data from xView2 with", len(extra_train_ds), "samples")
-
-    # Pretrain/warmup
-    if warmup:
-        callbacks = default_callbacks.copy()
-        criterions_dict = {}
-        losses = []
-        ignore_index = None
-
-        for loss_name, loss_weight in criterions:
-            criterion_callback = CriterionCallback(
-                prefix="seg_loss/" + loss_name,
-                input_key=INPUT_MASK_KEY if loss_name != "wbce" else [INPUT_MASK_KEY, INPUT_MASK_WEIGHT_KEY],
-                output_key=OUTPUT_MASK_KEY,
-                criterion_key=loss_name,
-                multiplier=float(loss_weight),
-            )
-
-            criterions_dict[loss_name] = get_loss(loss_name, ignore_index=ignore_index)
-            callbacks.append(criterion_callback)
-            losses.append(criterion_callback.prefix)
-            print("Using loss", loss_name, loss_weight)
-
-        callbacks += [
-            CriterionAggregatorCallback(prefix="loss", loss_keys=losses),
-            OptimizerCallback(accumulation_steps=accumulation_steps, decouple_weight_decay=False),
-        ]
-
-        parameters = get_lr_decay_parameters(model.named_parameters(), learning_rate, {"encoder": 0.1})
-        optimizer = get_optimizer("RAdam", parameters, learning_rate=learning_rate * 0.1)
-
-        loaders = collections.OrderedDict()
-        loaders["train"] = DataLoader(
-            train_ds,
-            batch_size=batch_size,
-            num_workers=num_workers,
-            pin_memory=True,
-            drop_last=True,
-            shuffle=train_sampler is None,
-            sampler=train_sampler,
-        )
-
-        loaders["valid"] = DataLoader(
-            valid_ds, batch_size=batch_size, num_workers=num_workers, pin_memory=True, shuffle=False, drop_last=False
-        )
-
-        runner.train(
-            fp16=fp16,
-            model=model,
-            criterion=criterions_dict,
-            optimizer=optimizer,
-            scheduler=None,
-            callbacks=callbacks,
-            loaders=loaders,
-            logdir=os.path.join(log_dir, "warmup"),
-            num_epochs=warmup,
-            verbose=verbose,
-            main_metric=main_metric,
-            minimize_metric=False,
-            checkpoint_data={"cmd_args": cmd_args},
-        )
-
-        del optimizer, loaders
-
-        best_checkpoint = os.path.join(log_dir, "warmup", "checkpoints", "best.pth")
-        model_checkpoint = os.path.join(log_dir, f"{checkpoint_prefix}_warmup.pth")
-        clean_checkpoint(best_checkpoint, model_checkpoint)
-
-        torch.cuda.empty_cache()
-        gc.collect()
 
     if run_train:
         loaders = collections.OrderedDict()
@@ -359,6 +327,16 @@ def main():
 
             print("Using online pseudolabeling with ", len(unlabeled_label), "samples")
 
+        valid_sampler = None
+        if args.distributed:
+            if train_sampler is not None:
+                train_sampler = DistributedSamplerWrapper(
+                    train_sampler, args.world_size, args.local_rank, shuffle=True
+                )
+            else:
+                train_sampler = DistributedSampler(train_ds, args.world_size, args.local_rank, shuffle=True)
+            valid_sampler = DistributedSampler(valid_ds, args.world_size, args.local_rank, shuffle=False)
+
         loaders["train"] = DataLoader(
             train_ds,
             batch_size=batch_size,
@@ -369,7 +347,9 @@ def main():
             sampler=train_sampler,
         )
 
-        loaders["valid"] = DataLoader(valid_ds, batch_size=batch_size, num_workers=num_workers, pin_memory=True)
+        loaders["valid"] = DataLoader(
+            valid_ds, batch_size=batch_size, num_workers=num_workers, pin_memory=True, sampler=valid_sampler
+        )
 
         # Create losses
         for loss_name, loss_weight in criterions:
@@ -426,7 +406,7 @@ def main():
                 losses.append(criterion_callback.prefix)
 
         callbacks += [
-            CriterionAggregatorCallback(prefix="loss", loss_keys=losses),
+            MetricAggregationCallback(prefix="loss", metrics=losses, mode="sum"),
             OptimizerCallback(accumulation_steps=accumulation_steps, decouple_weight_decay=False),
         ]
 
@@ -461,7 +441,7 @@ def main():
 
         # model training
         runner.train(
-            fp16=fp16,
+            fp16=distributed_params,
             model=model,
             criterion=criterions_dict,
             optimizer=optimizer,
@@ -493,5 +473,4 @@ def main():
 
 
 if __name__ == "__main__":
-    with torch.autograd.detect_anomaly():
-        main()
+    main()

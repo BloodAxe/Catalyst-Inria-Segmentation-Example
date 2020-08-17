@@ -1,7 +1,7 @@
 import math
 import warnings
 
-from catalyst.contrib.schedulers import OneCycleLRWithWarmup
+from catalyst.contrib.nn import OneCycleLRWithWarmup
 from torch.optim.lr_scheduler import (
     ExponentialLR,
     CyclicLR,

@@ -1,7 +1,9 @@
 import numpy as np
-from catalyst.dl import Callback, CallbackOrder, RunnerState
+from catalyst.dl import Callback, CallbackOrder, IRunner
 from pytorch_toolbelt.utils.catalyst import PseudolabelDatasetMixin
 from pytorch_toolbelt.utils.torch_utils import to_numpy
+
+__all__ = ["BCEOnlinePseudolabelingCallback2d"]
 
 
 class BCEOnlinePseudolabelingCallback2d(Callback):
@@ -60,35 +62,35 @@ class BCEOnlinePseudolabelingCallback2d(Callback):
     #     if state.loader_name == self.pseudolabel_loader:
     #         self.predictions = []
 
-    def on_stage_start(self, state: RunnerState):
+    def on_stage_start(self, runner: IRunner):
         self.last_labeled_epoch = None
 
-    def on_epoch_start(self, state: RunnerState):
+    def on_epoch_start(self, runner: IRunner):
         self.should_relabel = self.last_labeled_epoch is None or (
-            state.epoch == self.last_labeled_epoch + self.label_frequency
+            runner.epoch == self.last_labeled_epoch + self.label_frequency
         )
-        print("Should relabel", self.should_relabel, state.epoch)
+        print("Should relabel", self.should_relabel, runner.epoch)
 
-    def on_epoch_end(self, state: RunnerState):
+    def on_epoch_end(self, runner: IRunner):
         if self.should_relabel:
-            self.last_labeled_epoch = state.epoch
-            print("last_labeled_epoch", state.epoch)
+            self.last_labeled_epoch = runner.epoch
+            print("last_labeled_epoch", runner.epoch)
 
-    def get_probabilities(self, state: RunnerState):
+    def get_probabilities(self, state: IRunner):
         probs = state.output[self.output_key].detach().sigmoid()
         indexes = state.input[self.sample_index_key]
 
         return to_numpy(probs), to_numpy(indexes)
 
-    def on_batch_end(self, state: RunnerState):
-        if state.loader_name != self.pseudolabel_loader:
+    def on_batch_end(self, runner: IRunner):
+        if runner.loader_name != self.pseudolabel_loader:
             return
 
         if not self.should_relabel:
             return
 
         # Get predictions for batch
-        probs, indexes = self.get_probabilities(state)
+        probs, indexes = self.get_probabilities(runner)
 
         for p, sample_index in zip(probs, indexes):
             confident_negatives = p < (1.0 - self.prob_threshold)
