@@ -5,6 +5,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from ..dataset import OUTPUT_MASK_KEY
+from catalyst.registry import Model
 
 __all__ = ["HRNetSegmentationModel", "hrnet18", "hrnet34", "hrnet48"]
 
@@ -34,16 +35,19 @@ class HRNetSegmentationModel(nn.Module):
         return output
 
 
+@Model
 def hrnet18(num_classes=1, dropout=0.0, pretrained=True):
     encoder = E.HRNetV2Encoder18(pretrained=pretrained)
     return HRNetSegmentationModel(encoder, num_classes=num_classes, dropout=dropout)
 
 
+@Model
 def hrnet34(num_classes=1, dropout=0.0, pretrained=True):
     encoder = E.HRNetV2Encoder34(pretrained=pretrained)
     return HRNetSegmentationModel(encoder, num_classes=num_classes, dropout=dropout)
 
 
+@Model
 def hrnet48(num_classes=1, dropout=0.0, pretrained=True):
     encoder = E.HRNetV2Encoder48(pretrained=pretrained)
     return HRNetSegmentationModel(encoder, num_classes=num_classes, dropout=dropout)

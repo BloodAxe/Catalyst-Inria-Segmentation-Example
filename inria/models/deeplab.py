@@ -5,6 +5,7 @@ from torch import nn
 from torch.nn import functional as F
 
 from ..dataset import OUTPUT_MASK_32_KEY, OUTPUT_MASK_KEY
+from catalyst.registry import Model
 
 __all__ = ["DeeplabV3SegmentationModel", "resnet34_deeplab128", "seresnext101_deeplab256"]
 
@@ -49,11 +50,13 @@ class DeeplabV3SegmentationModel(nn.Module):
         return output
 
 
+@Model
 def resnet34_deeplab128(num_classes=1, dropout=0.0, pretrained=True):
     encoder = E.Resnet34Encoder(pretrained=pretrained)
     return DeeplabV3SegmentationModel(encoder, num_classes=num_classes, high_level_bottleneck=128, dropout=dropout)
 
 
+@Model
 def seresnext101_deeplab256(num_classes=1, dropout=0.0, pretrained=True):
     encoder = E.SEResNeXt101Encoder(pretrained=pretrained)
     return DeeplabV3SegmentationModel(encoder, num_classes=num_classes, high_level_bottleneck=256, dropout=dropout)

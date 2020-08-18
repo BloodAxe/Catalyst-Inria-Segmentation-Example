@@ -15,7 +15,7 @@ from scipy.ndimage import binary_dilation, binary_erosion
 from torch.utils.data import WeightedRandomSampler, Dataset, ConcatDataset
 
 from .augmentations import *
-from .augmentations import crop_transform_xview2
+from .augmentations import crop_transform_xview2, get_augmentations
 
 INPUT_IMAGE_KEY = "image"
 INPUT_IMAGE_ID_KEY = "image_id"
@@ -263,20 +263,13 @@ def get_datasets(
     :return: (train_loader, valid_loader)
     """
 
-    if augmentation == "hard":
-        train_transform = hard_augmentations()
-    elif augmentation == "medium":
-        train_transform = medium_augmentations()
-    elif augmentation == "light":
-        train_transform = light_augmentations()
-    elif augmentation == "safe":
-        train_transform = safe_augmentations()
-    else:
-        train_transform = A.Normalize()
+    normalize = A.Normalize()
 
-    valid_transform = A.Normalize()
     assert train_mode in {"random", "tiles"}
     locations = TRAIN_LOCATIONS
+
+    valid_transform = normalize
+    train_augmentation = get_augmentations(augmentation)
 
     if train_mode == "random":
 
@@ -304,7 +297,8 @@ def get_datasets(
         train_mask = [os.path.join(data_dir, "train", "gt", f"{fname}.tif") for fname in train_data]
         valid_mask = [os.path.join(data_dir, "train", "gt", f"{fname}.tif") for fname in valid_data]
 
-        train_transform = A.Compose([crop_transform(image_size), train_transform])
+        train_crop = crop_transform(image_size, input_size=5000)
+        train_transform = A.Compose([train_crop] + train_augmentation + [normalize])
 
         trainset = InriaImageMaskDataset(
             train_img, train_mask, need_weight_mask=need_weight_mask, transform=train_transform
@@ -343,7 +337,9 @@ def get_datasets(
             train_mask = train_mask[:128]
             train_img_ids = train_img_ids[:128]
 
-        train_transform = A.Compose([crop_transform(image_size, input_size=768), train_transform])
+        train_crop = [crop_transform(image_size, input_size=768)]
+        train_transform = A.Compose([train_crop] + train_augmentation + [normalize])
+
         trainset = InriaImageMaskDataset(
             train_img,
             train_mask,
@@ -406,7 +402,7 @@ def get_xview2_extra_dataset(
     elif augmentation == "safe":
         train_transform = safe_augmentations()
     else:
-        train_transform = A.Normalize()
+        train_transform = []
 
     def is_pre_image(fname):
         return "_pre_" in fname
@@ -454,15 +450,19 @@ def get_pseudolabeling_dataset(
 
     masks = [os.path.join(masks_dir, fs.id_from_fname(image_fname) + ".png") for image_fname in images]
 
-    if augmentation == "hard":
-        transfrom = A.Compose([crop_transform(image_size, input_size=768), hard_augmentations()])
-    elif augmentation == "medium":
-        transfrom = A.Compose([crop_transform(image_size, input_size=768), medium_augmentations()])
-    elif augmentation == "light":
-        transfrom = A.Compose([crop_transform(image_size, input_size=768), light_augmentations()])
-    else:
-        transfrom = A.Normalize()
+    normalize = A.Normalize()
+    crop = crop_transform(image_size, input_size=768)
 
+    if augmentation == "hard":
+        augs = hard_augmentations()
+    elif augmentation == "medium":
+        augs = medium_augmentations()
+    elif augmentation == "light":
+        augs = light_augmentations()
+    else:
+        augs = []
+
+    transfrom = A.Compose(crop + augs + normalize)
     return InriaImageMaskDataset(
         images,
         masks if include_masks else None,

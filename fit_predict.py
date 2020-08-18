@@ -108,7 +108,7 @@ def main():
     parser.add_argument("--size", default=512, type=int)
     parser.add_argument("-s", "--scheduler", default="multistep", type=str, help="")
     parser.add_argument("-x", "--experiment", default=None, type=str, help="")
-    parser.add_argument("-d", "--dropout", default=0.0, type=float, help="Dropout before head layer")
+    parser.add_argument("-d", "--dropout", default=None, type=float, help="Dropout before head layer")
     parser.add_argument("--opl", action="store_true")
     parser.add_argument(
         "--warmup", default=0, type=int, help="Number of warmup epochs with reduced LR on encoder parameters"
@@ -134,12 +134,13 @@ def main():
         # torch.distributed.init_process_group(backend="nccl", init_method="env://")
         print("Initialized init_process_group", args.local_rank)
 
+    distributed_params = {}
     if args.distributed:
         distributed_params = {"rank": args.local_rank, "syncbn": True}
-        if args.fp16:
-            distributed_params["opt_level"] = "O1"
-    else:
-        distributed_params = fp16
+
+    if args.fp16:
+        distributed_params["apex"] = True
+        distributed_params["opt_level"] = "O1"
 
     set_manual_seed(args.seed + args.local_rank)
     catalyst.utils.set_global_seed(args.seed + args.local_rank)
@@ -176,7 +177,11 @@ def main():
     run_train = num_epochs > 0
     need_weight_mask = any(c[0] == "wbce" for c in criterions)
 
-    model: nn.Module = get_model(model_name, dropout=dropout).cuda()
+    custom_model_kwargs = {}
+    if dropout is not None:
+        custom_model_kwargs["dropout"] = float(dropout)
+
+    model: nn.Module = get_model(model_name, **custom_model_kwargs).cuda()
 
     if args.transfer:
         transfer_checkpoint = fs.auto_file(args.transfer)
@@ -241,6 +246,7 @@ def main():
                 "size": args.size,
                 "weight_decay": weight_decay,
                 "epochs": num_epochs,
+                "dropout": None if dropout is None else float(dropout)
             }
         ),
     ]

@@ -1,14 +1,7 @@
-import warnings
 from typing import Callable, Optional, List, Union
 
 import cv2
-import matplotlib.pyplot as plt
 import numpy as np
-import torch
-import torch.nn.functional as F
-from catalyst.dl import Callback, RunnerState, CallbackOrder
-from catalyst.dl.callbacks import TensorboardLogger
-from catalyst.utils.tensorboard import SummaryWriter
 from pytorch_toolbelt.utils.torch_utils import rgb_image_from_tensor, to_numpy
 
 from inria.dataset import OUTPUT_OFFSET_KEY, OUTPUT_MASK_4_KEY

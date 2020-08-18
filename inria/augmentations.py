@@ -1,9 +1,8 @@
 import albumentations as A
 import cv2
+from typing import Tuple, List
 
 __all__ = ["crop_transform", "safe_augmentations", "light_augmentations", "medium_augmentations", "hard_augmentations"]
-
-from typing import Tuple
 
 
 def crop_transform(image_size: Tuple[int, int], min_scale=0.75, max_scale=1.25, input_size=5000):
@@ -30,77 +29,81 @@ def crop_transform_xview2(image_size: Tuple[int, int], min_scale=0.4, max_scale=
     )
 
 
-def safe_augmentations():
-    return A.Compose([A.HorizontalFlip(), A.RandomBrightnessContrast(), A.Normalize()])
+def safe_augmentations() -> List[A.DualTransform]:
+    return [
+        # D4 Augmentations
+        A.RandomRotate90(p=1),
+        A.Transpose(p=0.5),
+    ]
 
 
-def light_augmentations():
-    return A.Compose(
-        [
-            A.HorizontalFlip(),
-            A.RandomBrightnessContrast(),
-            A.OneOf(
-                [
-                    A.ShiftScaleRotate(scale_limit=0.05, rotate_limit=15, border_mode=cv2.BORDER_CONSTANT),
-                    A.IAAAffine(),
-                    A.IAAPerspective(),
-                    A.NoOp(),
-                ]
-            ),
-            A.HueSaturationValue(),
-            A.Normalize(),
-        ]
-    )
+def light_augmentations() -> List[A.DualTransform]:
+    return [
+        # D4 Augmentations
+        A.RandomRotate90(p=1),
+        A.Transpose(p=0.5),
+        A.RandomBrightnessContrast(),
+        A.ShiftScaleRotate(scale_limit=0.05, rotate_limit=15, border_mode=cv2.BORDER_CONSTANT),
+    ]
 
 
-def medium_augmentations():
-    return A.Compose(
-        [
-            A.HorizontalFlip(),
-            A.ShiftScaleRotate(scale_limit=0.1, rotate_limit=15, border_mode=cv2.BORDER_CONSTANT),
-            # Add occasion blur/sharpening
-            A.OneOf([A.GaussianBlur(), A.IAASharpen(), A.NoOp()]),
-            # Spatial-preserving augmentations:
-            A.OneOf([A.CoarseDropout(), A.MaskDropout(max_objects=5), A.NoOp()]),
-            A.GaussNoise(),
-            A.OneOf([A.RandomBrightnessContrast(), A.CLAHE(), A.HueSaturationValue(), A.RGBShift(), A.RandomGamma()]),
-            # Weather effects
-            A.RandomFog(fog_coef_lower=0.01, fog_coef_upper=0.3, p=0.1),
-            A.Normalize(),
-        ]
-    )
+def medium_augmentations() -> List[A.DualTransform]:
+    return [
+        A.HorizontalFlip(),
+        A.ShiftScaleRotate(scale_limit=0.1, rotate_limit=15, border_mode=cv2.BORDER_CONSTANT),
+        # Add occasion blur/sharpening
+        A.OneOf([A.GaussianBlur(), A.IAASharpen(), A.NoOp()]),
+        # Spatial-preserving augmentations:
+        A.OneOf([A.CoarseDropout(), A.MaskDropout(max_objects=5), A.NoOp()]),
+        A.GaussNoise(),
+        A.OneOf([A.RandomBrightnessContrast(), A.CLAHE(), A.HueSaturationValue(), A.RGBShift(), A.RandomGamma()]),
+        # Weather effects
+        A.RandomFog(fog_coef_lower=0.01, fog_coef_upper=0.3, p=0.1),
+    ]
 
 
-def hard_augmentations():
-    return A.Compose(
-        [
-            A.RandomRotate90(),
-            A.Transpose(),
-            A.RandomGridShuffle(),
-            A.OneOf(
-                [
-                    A.ShiftScaleRotate(scale_limit=0.2, rotate_limit=45, border_mode=cv2.BORDER_CONSTANT),
-                    A.IAAAffine(shear=20, mode="constant"),
-                ]
-            ),
-            A.ElasticTransform(border_mode=cv2.BORDER_CONSTANT, alpha_affine=5, mask_value=0, value=0),
-            # Add occasion blur
-            A.OneOf([A.GaussianBlur(), A.GaussNoise(), A.IAAAdditiveGaussianNoise(), A.NoOp()]),
-            # D4 Augmentations
-            A.OneOf([A.CoarseDropout(), A.MaskDropout(max_objects=10), A.NoOp()]),
-            # Spatial-preserving augmentations:
-            A.OneOf(
-                [
-                    A.RandomBrightnessContrast(brightness_by_max=True),
-                    A.CLAHE(),
-                    A.HueSaturationValue(),
-                    A.RGBShift(),
-                    A.RandomGamma(),
-                    A.NoOp(),
-                ]
-            ),
-            # Weather effects
-            A.OneOf([A.RandomFog(fog_coef_lower=0.01, fog_coef_upper=0.3, p=0.1), A.NoOp()]),
-            A.Normalize(),
-        ]
-    )
+def hard_augmentations() -> List[A.DualTransform]:
+    return [
+        # D4 Augmentations
+        A.RandomRotate90(p=1),
+        A.Transpose(p=0.5),
+        # Spatial augmentations
+        A.OneOf(
+            [
+                A.ShiftScaleRotate(scale_limit=0.2, rotate_limit=45, border_mode=cv2.BORDER_REFLECT101),
+                A.ElasticTransform(border_mode=cv2.BORDER_REFLECT101, alpha_affine=5),
+            ]
+        ),
+        # Color augmentations
+        A.OneOf(
+            [
+                A.RandomBrightnessContrast(brightness_by_max=True),
+                A.CLAHE(),
+                A.FancyPCA(),
+                A.HueSaturationValue(),
+                A.RGBShift(),
+                A.RandomGamma(),
+            ]
+        ),
+        # Dropout & Shuffle
+        A.OneOf([A.RandomGridShuffle(), A.CoarseDropout(), A.MaskDropout(max_objects=2, mask_fill_value=0),]),
+        # Add occasion blur
+        A.OneOf([A.GaussianBlur(), A.GaussNoise(), A.IAAAdditiveGaussianNoise()]),
+        # Weather effects
+        A.RandomFog(fog_coef_lower=0.01, fog_coef_upper=0.3, p=0.1),
+    ]
+
+
+def get_augmentations(augmentation: str) -> List[A.DualTransform]:
+    if augmentation == "hard":
+        aug_transform = hard_augmentations()
+    elif augmentation == "medium":
+        aug_transform = medium_augmentations()
+    elif augmentation == "light":
+        aug_transform = light_augmentations()
+    elif augmentation == "safe":
+        aug_transform = safe_augmentations()
+    else:
+        aug_transform = []
+
+    return aug_transform

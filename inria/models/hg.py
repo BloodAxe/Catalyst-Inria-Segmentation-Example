@@ -5,6 +5,7 @@ from torch.nn import PixelShuffle
 
 from inria.dataset import OUTPUT_MASK_KEY, OUTPUT_MASK_4_KEY
 import torch.nn.functional as F
+from catalyst.registry import Model
 
 
 class HGSegmentationDecoderNaked(nn.Module):
@@ -95,21 +96,25 @@ class SupervisedHGSegmentationModel(nn.Module):
         return output
 
 
+@Model
 def hg4(num_classes=1, dropout=0, pretrained=False):
     encoder = StackedHGEncoder(stack_level=4)
     return HGSegmentationModel(encoder, num_classes=num_classes)
 
 
+@Model
 def shg4(num_classes=1, dropout=0, pretrained=False):
     encoder = StackedSupervisedHGEncoder(input_channels=3, stack_level=4, supervision_channels=num_classes)
     return SupervisedHGSegmentationModel(encoder, num_classes=num_classes)
 
 
+@Model
 def hg8(num_classes=1, dropout=0, pretrained=False):
     encoder = StackedHGEncoder(stack_level=8)
     return HGSegmentationModel(encoder, num_classes=num_classes)
 
 
+@Model
 def shg8(num_classes=1, dropout=0, pretrained=False):
     encoder = StackedSupervisedHGEncoder(input_channels=3, stack_level=8, supervision_channels=num_classes)
     return SupervisedHGSegmentationModel(encoder, num_classes=num_classes)
