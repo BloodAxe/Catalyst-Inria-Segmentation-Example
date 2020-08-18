@@ -324,6 +324,8 @@ def get_datasets(
 
     elif train_mode == "tiles":
         inria_tiles = pd.read_csv(os.path.join(data_dir, "inria_tiles.csv"))
+        inria_tiles["image"] = inria_tiles["image"].apply(lambda x: os.path.join(data_dir, x))
+        inria_tiles["mask"] = inria_tiles["mask"].apply(lambda x: os.path.join(data_dir, x))
 
         if buildings_only:
             inria_tiles = inria_tiles[inria_tiles["has_buildings"]]
