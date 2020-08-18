@@ -131,6 +131,7 @@ def main():
         print("Initializing init_process_group", args.local_rank)
 
         torch.cuda.set_device(args.local_rank)
+        torch.distributed.init_process_group(backend="nccl")
         # torch.distributed.init_process_group(backend="nccl", init_method="env://")
         print("Initialized init_process_group", args.local_rank)
 
@@ -197,7 +198,6 @@ def main():
         print("Loaded model weights from:", args.checkpoint)
         report_checkpoint(checkpoint)
 
-    runner = SupervisedRunner(input_key=INPUT_IMAGE_KEY, output_key=None, device="cuda")
     main_metric = "optimized_jaccard"
 
     current_time = datetime.now().strftime("%y%m%d_%H_%M")
@@ -443,8 +443,14 @@ def main():
         print("  Batch size     :", batch_size)
         print("  Criterion      :", criterions)
         print("  Use weight mask:", need_weight_mask)
+        if args.distributed:
+            print("Distributed")
+            print("  World size     :", args.world_size)
+            print("  Local rank     :", args.local_rank)
+            print("  Is master      :", args.is_master)
 
         # model training
+        runner = SupervisedRunner(input_key=INPUT_IMAGE_KEY, output_key=None, device="cuda")
         runner.train(
             fp16=distributed_params,
             model=model,
