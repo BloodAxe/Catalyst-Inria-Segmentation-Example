@@ -60,11 +60,6 @@ class JaccardMetricPerImage(Callback):
             self.scores_per_image[img_id]["union"] += float(img_union)
 
     def on_loader_end(self, runner: IRunner):
-        eps = 1e-7
-
-        ious_per_image = []
-        ious_per_location = defaultdict(list)
-
         # Gather statistics from all nodes
         gathered_scores_per_image = all_gather(self.scores_per_image)
         all_scores_per_image = defaultdict(lambda: {"intersection": 0.0, "union": 0.0})
@@ -72,6 +67,10 @@ class JaccardMetricPerImage(Callback):
             for image_id, values in scores_per_image.items():
                 all_scores_per_image[image_id]["intersection"] += values["intersection"]
                 all_scores_per_image[image_id]["union"] += values["union"]
+
+        eps = 1e-7
+        ious_per_image = []
+        ious_per_location = defaultdict(list)
 
         for image_id, values in all_scores_per_image.items():
             intersection = values["intersection"]

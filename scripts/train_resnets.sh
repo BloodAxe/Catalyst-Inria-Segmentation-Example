@@ -6,4 +6,4 @@ python -m torch.distributed.launch --nproc_per_node=4 fit_predict.py --fp16 -w 8
   -e 50 -s cos2\
   --criterion bce 1\
   --criterion dice 1\
-  --train-mode tiles --show
+  --train-mode tiles --show --verbose
