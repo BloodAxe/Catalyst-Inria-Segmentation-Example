@@ -175,5 +175,5 @@ class JaccardMetricPerImageWithOptimalThreshold(Callback):
         runner.loader_metrics[self.prefix + "/" + "threshold"] = float(threshold_value)
         runner.loader_metrics[self.prefix] = float(iou_at_threshold)
 
-        logger = get_tensorboard_logger(runner)
-        logger.add_histogram(self.prefix, iou, global_step=runner.epoch)
+        # logger = get_tensorboard_logger(runner)
+        # logger.add_histogram(self.prefix, iou, global_step=runner.epoch)
