@@ -134,6 +134,8 @@ def main():
         torch.distributed.init_process_group(backend="nccl")
         print("Initialized init_process_group", args.local_rank)
 
+    is_master = args.is_master | (not args.distributed)
+
     distributed_params = {}
     if args.distributed:
         distributed_params = {"rank": args.local_rank, "syncbn": True}
@@ -233,7 +235,10 @@ def main():
         # JaccardMetricPerImage(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY, prefix="jaccard"),
         JaccardMetricPerImageWithOptimalThreshold(
             input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY, prefix="optimized_jaccard"
-        ),
+        )]
+
+    if is_master:
+        default_callbacks += [
         BestMetricCheckpointCallback(target_metric="optimized_jaccard", target_metric_minimize=False),
         HyperParametersCallback(
             hparam_dict={
@@ -249,7 +254,7 @@ def main():
         ),
     ]
 
-    if show:
+    if show and is_master:
         visualize_inria_predictions = partial(
             draw_inria_predictions,
             image_key=INPUT_IMAGE_KEY,
