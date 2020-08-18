@@ -69,7 +69,7 @@ class JaccardMetricPerImage(Callback):
         for scores_per_image in gathered_scores_per_image:
             for image_id, values in scores_per_image.items():
                 all_scores_per_image[image_id]["intersection"] += values["intersection"]
-                all_scores_per_image[image_id]["intersection"] += values["intersection"]
+                all_scores_per_image[image_id]["union"] += values["union"]
 
         for image_id, values in all_scores_per_image.items():
             intersection = values["intersection"]
@@ -154,7 +154,7 @@ class JaccardMetricPerImageWithOptimalThreshold(Callback):
         for scores_per_image in all_gathered_scores_per_image:
             for image_id, values in scores_per_image.items():
                 all_scores_per_image[image_id]["intersection"] += values["intersection"]
-                all_scores_per_image[image_id]["intersection"] += values["intersection"]
+                all_scores_per_image[image_id]["union"] += values["union"]
 
         for image_id, values in all_scores_per_image.items():
             intersection = values["intersection"]
