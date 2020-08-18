@@ -39,6 +39,9 @@ def get_scheduler(scheduler_name: str, optimizer, lr, num_epochs, batches_in_epo
     if scheduler_name.lower() == "cos":
         return CosineAnnealingLR(optimizer, num_epochs, eta_min=1e-6)
 
+    if scheduler_name.lower() == "cos2":
+        return CosineAnnealingLR(optimizer, num_epochs, eta_min=float(lr * 0.1))
+
     if scheduler_name.lower() == "cosr":
         return CosineAnnealingWarmRestarts(optimizer, T_0=max(2, num_epochs // 4), eta_min=1e-6)
 
