@@ -132,7 +132,6 @@ def main():
 
         torch.cuda.set_device(args.local_rank)
         torch.distributed.init_process_group(backend="nccl")
-        # torch.distributed.init_process_group(backend="nccl", init_method="env://")
         print("Initialized init_process_group", args.local_rank)
 
     distributed_params = {}

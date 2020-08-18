@@ -33,11 +33,11 @@ class JaccardMetricPerImage(Callback):
         self.output_key = output_key
         self.input_key = input_key
         self.image_id_key = image_id_key
-        self.scores_per_image = defaultdict(lambda: {"intersection": 0.0, "union": 0.0})
+        self.scores_per_image = {}
         self.locations = ["austin", "chicago", "kitsap", "tyrol-w", "vienna"]
 
     def on_loader_start(self, state):
-        self.scores_per_image = defaultdict(lambda: {"intersection": 0.0, "union": 0.0})
+        self.scores_per_image = {}
 
     def on_batch_end(self, runner: IRunner):
         image_ids = runner.input[self.image_id_key]
@@ -54,6 +54,8 @@ class JaccardMetricPerImage(Callback):
         intersection = torch.sum(targets * outputs, dim=1)
         union = torch.sum(targets, dim=1) + torch.sum(outputs, dim=1)
         for img_id, img_intersection, img_union in zip(image_ids, intersection, union):
+            if img_id not in self.scores_per_image:
+                self.scores_per_image[img_id] = {"intersection": 0, "union": 0}
             self.scores_per_image[img_id]["intersection"] += float(img_intersection)
             self.scores_per_image[img_id]["union"] += float(img_union)
 
@@ -109,14 +111,11 @@ class JaccardMetricPerImageWithOptimalThreshold(Callback):
         self.output_key = output_key
         self.input_key = input_key
         self.image_id_key = image_id_key
-        self.thresholds = torch.arange(0.3, 0.7, 0.01).detach()
-
-        n = len(self.thresholds)
-        self.scores_per_image = defaultdict(lambda: {"intersection": np.zeros(n), "union": np.zeros(n)})
+        self.thresholds = torch.arange(0.3, 0.7, 0.05).detach()
+        self.scores_per_image = {}
 
     def on_loader_start(self, runner: IRunner):
-        n = len(self.thresholds)
-        self.scores_per_image = defaultdict(lambda: {"intersection": np.zeros(n), "union": np.zeros(n)})
+        self.scores_per_image = {}
 
     @torch.no_grad()
     def on_batch_end(self, runner: IRunner):
@@ -131,6 +130,7 @@ class JaccardMetricPerImageWithOptimalThreshold(Callback):
             1, 1, -1
         )
         targets = targets.view(targets.size(0), -1) == 1
+        n = len(self.thresholds)
 
         for i, threshold in enumerate(self.thresholds):
             # Binarize outputs
@@ -139,6 +139,9 @@ class JaccardMetricPerImageWithOptimalThreshold(Callback):
             union = torch.sum(targets | outputs_i, dim=1)
 
             for img_id, img_intersection, img_union in zip(image_id, intersection, union):
+                if img_id not in self.scores_per_image:
+                    self.scores_per_image[img_id] = {"intersection": np.zeros(n), "union": np.zeros(n)}
+
                 self.scores_per_image[img_id]["intersection"][i] += float(img_intersection)
                 self.scores_per_image[img_id]["union"][i] += float(img_union)
 
