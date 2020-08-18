@@ -125,6 +125,8 @@ class JaccardMetricPerImageWithOptimalThreshold(Callback):
         targets = runner.input[self.input_key].detach()
 
         # Flatten images for easy computing IoU
+        assert outputs.size(1) == 1
+        assert targets.size(1) == 1
         outputs = outputs.view(outputs.size(0), -1, 1) > self.thresholds.to(outputs.dtype).to(outputs.device).view(
             1, 1, -1
         )
