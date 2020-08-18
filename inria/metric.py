@@ -7,6 +7,7 @@ from pytorch_toolbelt.utils.catalyst import get_tensorboard_logger
 from pytorch_toolbelt.utils.distributed import all_gather
 from catalyst.core import Callback, CallbackNode, CallbackOrder, IRunner
 from catalyst.dl import registry
+from catalyst.utils.distributed import get_rank
 
 __all__ = ["JaccardMetricPerImage", "JaccardMetricPerImageWithOptimalThreshold"]
 
@@ -175,5 +176,6 @@ class JaccardMetricPerImageWithOptimalThreshold(Callback):
         runner.loader_metrics[self.prefix + "/" + "threshold"] = float(threshold_value)
         runner.loader_metrics[self.prefix] = float(iou_at_threshold)
 
-        # logger = get_tensorboard_logger(runner)
-        # logger.add_histogram(self.prefix, iou, global_step=runner.epoch)
+        if get_rank() in {-1, 0}:
+            logger = get_tensorboard_logger(runner)
+            logger.add_histogram(self.prefix, iou, global_step=runner.epoch)
