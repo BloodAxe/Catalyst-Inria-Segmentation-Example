@@ -2,7 +2,7 @@ import albumentations as A
 import cv2
 from typing import Tuple, List
 
-__all__ = ["crop_transform", "safe_augmentations", "light_augmentations", "medium_augmentations", "hard_augmentations"]
+__all__ = ["crop_transform", "safe_augmentations", "light_augmentations", "medium_augmentations", "hard_augmentations", "get_augmentations"]
 
 
 def crop_transform(image_size: Tuple[int, int], min_scale=0.75, max_scale=1.25, input_size=5000):
@@ -86,7 +86,7 @@ def hard_augmentations() -> List[A.DualTransform]:
             ]
         ),
         # Dropout & Shuffle
-        A.OneOf([A.RandomGridShuffle(), A.CoarseDropout(), A.MaskDropout(max_objects=2, mask_fill_value=0),]),
+        A.OneOf([A.RandomGridShuffle(), A.CoarseDropout(), A.MaskDropout(max_objects=2, mask_fill_value=0), ]),
         # Add occasion blur
         A.OneOf([A.GaussianBlur(), A.GaussNoise(), A.IAAAdditiveGaussianNoise()]),
         # Weather effects

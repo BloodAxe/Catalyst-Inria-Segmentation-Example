@@ -18,11 +18,11 @@ class JaccardMetricPerImage(Callback):
     """
 
     def __init__(
-        self,
-        input_key: str = "targets",
-        output_key: str = "logits",
-        image_id_key: str = "image_id",
-        prefix: str = "jaccard",
+            self,
+            input_key: str = "targets",
+            output_key: str = "logits",
+            image_id_key: str = "image_id",
+            prefix: str = "jaccard",
     ):
         super().__init__(CallbackOrder.Metric, CallbackNode.All)
         """
@@ -64,11 +64,12 @@ class JaccardMetricPerImage(Callback):
         ious_per_location = defaultdict(list)
 
         # Gather statistics from all nodes
-        scores_per_image = all_gather(self.scores_per_image)
+        gathered_scores_per_image = all_gather(self.scores_per_image)
         all_scores_per_image = defaultdict(lambda: {"intersection": 0.0, "union": 0.0})
-        for image_id, values in scores_per_image:
-            all_scores_per_image[image_id]["intersection"] += values["intersection"]
-            all_scores_per_image[image_id]["intersection"] += values["intersection"]
+        for scores_per_image in gathered_scores_per_image:
+            for image_id, values in scores_per_image.items():
+                all_scores_per_image[image_id]["intersection"] += values["intersection"]
+                all_scores_per_image[image_id]["intersection"] += values["intersection"]
 
         for image_id, values in all_scores_per_image.items():
             intersection = values["intersection"]
@@ -93,11 +94,11 @@ class JaccardMetricPerImageWithOptimalThreshold(Callback):
     """
 
     def __init__(
-        self,
-        input_key: str = "targets",
-        output_key: str = "logits",
-        image_id_key: str = "image_id",
-        prefix: str = "optimal_threshold",
+            self,
+            input_key: str = "targets",
+            output_key: str = "logits",
+            image_id_key: str = "image_id",
+            prefix: str = "optimal_threshold",
     ):
         super().__init__(CallbackOrder.Metric)
         """
@@ -144,13 +145,14 @@ class JaccardMetricPerImageWithOptimalThreshold(Callback):
         ious_per_image = []
 
         # Gather statistics from all nodes
-        scores_per_image = all_gather(self.scores_per_image)
+        all_gathered_scores_per_image = all_gather(self.scores_per_image)
 
         n = len(self.thresholds)
         all_scores_per_image = defaultdict(lambda: {"intersection": np.zeros(n), "union": np.zeros(n)})
-        for image_id, values in scores_per_image:
-            all_scores_per_image[image_id]["intersection"] += values["intersection"]
-            all_scores_per_image[image_id]["intersection"] += values["intersection"]
+        for scores_per_image in all_gathered_scores_per_image:
+            for image_id, values in scores_per_image.items():
+                all_scores_per_image[image_id]["intersection"] += values["intersection"]
+                all_scores_per_image[image_id]["intersection"] += values["intersection"]
 
         for image_id, values in all_scores_per_image.items():
             intersection = values["intersection"]

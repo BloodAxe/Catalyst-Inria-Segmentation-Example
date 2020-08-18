@@ -167,7 +167,6 @@ def main():
     online_pseudolabeling = args.opl
     criterions = args.criterion
     verbose = args.verbose
-    warmup = args.warmup
     show = args.show
     use_dsv = args.dsv
     accumulation_steps = args.accumulation_steps
@@ -199,7 +198,7 @@ def main():
         report_checkpoint(checkpoint)
 
     runner = SupervisedRunner(input_key=INPUT_IMAGE_KEY, output_key=None, device="cuda")
-    main_metric = "jaccard"
+    main_metric = "optimized_jaccard"
 
     current_time = datetime.now().strftime("%y%m%d_%H_%M")
     checkpoint_prefix = f"{current_time}_{args.model}"
@@ -232,7 +231,7 @@ def main():
 
     default_callbacks = [
         PixelAccuracyCallback(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY),
-        JaccardMetricPerImage(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY, prefix="jaccard"),
+        # JaccardMetricPerImage(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY, prefix="jaccard"),
         JaccardMetricPerImageWithOptimalThreshold(
             input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY, prefix="optimized_jaccard"
         ),
@@ -360,7 +359,7 @@ def main():
         # Create losses
         for loss_name, loss_weight in criterions:
             criterion_callback = CriterionCallback(
-                prefix="seg_loss/" + loss_name,
+                prefix=f"{INPUT_MASK_KEY}/" + loss_name,
                 input_key=INPUT_MASK_KEY if loss_name != "wbce" else [INPUT_MASK_KEY, INPUT_MASK_WEIGHT_KEY],
                 output_key=OUTPUT_MASK_KEY,
                 criterion_key=loss_name,
@@ -380,10 +379,10 @@ def main():
             criterions_dict[criterions] = AdaptiveMaskLoss2d(get_loss(dsv_loss_name, ignore_index=ignore_index))
 
             for i, dsv_input in enumerate(
-                [OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY, OUTPUT_MASK_32_KEY]
+                    [OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY, OUTPUT_MASK_32_KEY]
             ):
                 criterion_callback = CriterionCallback(
-                    prefix="seg_loss_dsv/" + dsv_input,
+                    prefix=f"{dsv_input}/" + dsv_loss_name,
                     input_key=INPUT_MASK_KEY,
                     output_key=dsv_input,
                     criterion_key=criterions,

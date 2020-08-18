@@ -337,7 +337,7 @@ def get_datasets(
             train_mask = train_mask[:128]
             train_img_ids = train_img_ids[:128]
 
-        train_crop = [crop_transform(image_size, input_size=768)]
+        train_crop = crop_transform(image_size, input_size=768)
         train_transform = A.Compose([train_crop] + train_augmentation + [normalize])
 
         trainset = InriaImageMaskDataset(

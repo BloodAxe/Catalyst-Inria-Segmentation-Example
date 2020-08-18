@@ -17,7 +17,7 @@ __all__ = [
     "resnet18_unet32",
     "resnet34_unet32",
     "resnet50_unet32",
-    "resnet101_unet32",
+    "resnet101_unet64",
     "resnet152_unet32",
     "densenet121_unet32",
     "densenet161_unet32",
@@ -99,12 +99,12 @@ def resnet50_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=Tru
 
 
 @Model
-def resnet101_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
+def resnet101_unet64(input_channels=3, num_classes=1, dropout=0.5, pretrained=True):
     encoder = E.Resnet101Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
-    return UnetSegmentationModel(encoder, num_classes=num_classes, unet_channels=[32, 64, 128, 256], dropout=dropout)
+    return UnetSegmentationModel(encoder, num_classes=num_classes, unet_channels=[64, 128, 256, 512], dropout=dropout)
 
 
 @Model
