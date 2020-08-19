@@ -1,10 +1,7 @@
-torch==1.6.0+cu101
-torchvision==0.7.0+cu101
+torch=>1.5.0
 catalyst==20.8.2
 albumentations>=0.4.6
-pytorch-toolbelt>=0.3.3
+pytorch-toolbelt>=0.4.0
 opencv-python>=4.0
 pytorch-ranger==0.1.1
 torch-optimizer==0.0.1a15
-
--f https://download.pytorch.org/whl/torch_stable.html
