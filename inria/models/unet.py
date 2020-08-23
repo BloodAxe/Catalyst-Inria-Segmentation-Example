@@ -6,6 +6,7 @@ from pytorch_toolbelt.modules import conv1x1, UnetBlock, ACT_RELU, ABN, ACT_SWIS
 from pytorch_toolbelt.modules import encoders as E
 from pytorch_toolbelt.modules.decoders import UNetDecoder
 from pytorch_toolbelt.modules.encoders import EncoderModule
+from .timm_encoders import B4Encoder, B0Encoder
 from torch import nn, Tensor
 from torch.nn import functional as F
 
@@ -24,20 +25,19 @@ __all__ = [
     "densenet169_unet32",
     "densenet201_unet32",
     "b0_unet32",
-    "b5_unet32",
-    "b5_unet32_relu",
+    "b4_unet32",
 ]
 
 
 class UnetSegmentationModel(nn.Module):
     def __init__(
-        self,
-        encoder: EncoderModule,
-        unet_channels: Union[int, List[int]],
-        num_classes: int = 1,
-        dropout=0.25,
-        full_size_mask=True,
-        activation=ACT_RELU,
+            self,
+            encoder: EncoderModule,
+            unet_channels: Union[int, List[int]],
+            num_classes: int = 1,
+            dropout=0.25,
+            full_size_mask=True,
+            activation=ACT_RELU,
     ):
         super().__init__()
         self.encoder = encoder
@@ -188,7 +188,7 @@ def hrnet48_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True
 # B0-Unet
 @Model
 def b0_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
-    encoder = E.EfficientNetB0Encoder()
+    encoder = B0Encoder(pretrained=pretrained)
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
@@ -198,8 +198,8 @@ def b0_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
 
 
 @Model
-def b5_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
-    encoder = E.EfficientNetB5Encoder()
+def b4_unet32(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):
+    encoder = B4Encoder(pretrained=pretrained)
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
@@ -207,13 +207,12 @@ def b5_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
         encoder, num_classes=num_classes, unet_channels=[32, 64, 128], activation=ACT_SWISH, dropout=dropout
     )
 
-
 @Model
-def b5_unet32_relu(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
-    encoder = E.EfficientNetB5Encoder(activation=ACT_RELU)
+def b4_unet32_s2(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):
+    encoder = B4Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
     return UnetSegmentationModel(
-        encoder, num_classes=num_classes, unet_channels=[32, 64, 128], activation=ACT_RELU, dropout=dropout
+        encoder, num_classes=num_classes, unet_channels=[32, 64, 128, 256], activation=ACT_SWISH, dropout=dropout
     )
