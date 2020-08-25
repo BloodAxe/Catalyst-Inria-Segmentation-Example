@@ -111,7 +111,7 @@ class JaccardMetricPerImageWithOptimalThreshold(Callback):
         self.output_key = output_key
         self.input_key = input_key
         self.image_id_key = image_id_key
-        self.thresholds = torch.arange(0.3, 0.7, 0.05).detach()
+        self.thresholds = torch.arange(0.3, 0.6, 0.025).detach()
         self.scores_per_image = {}
 
     def on_loader_start(self, runner: IRunner):

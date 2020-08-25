@@ -5,8 +5,8 @@ import subprocess
 import cv2
 import numpy as np
 import torch
-from catalyst.utils import load_checkpoint, unpack_checkpoint
 from pytorch_toolbelt.inference.tta import TTAWrapper, d4_image2mask, fliplr_image2mask, MultiscaleTTAWrapper
+from pytorch_toolbelt.utils.catalyst import report_checkpoint
 from torch import nn
 
 from tqdm import tqdm
@@ -14,7 +14,7 @@ from pytorch_toolbelt.utils.fs import auto_file, find_in_dir
 
 from inria.dataset import read_inria_image, OUTPUT_MASK_KEY
 from inria.factory import predict, PickModelOutput
-from inria.models import get_model
+from inria.models import model_from_checkpoint
 
 
 def main():
@@ -35,44 +35,26 @@ def main():
 
     data_dir = args.data_dir
     checkpoint_file = auto_file(args.checkpoint)
-    run_dir = os.path.dirname(os.path.dirname(checkpoint_file))
+    run_dir = os.path.dirname(checkpoint_file)
     out_dir = os.path.join(run_dir, "submit")
     os.makedirs(out_dir, exist_ok=True)
 
-    checkpoint = load_checkpoint(checkpoint_file)
-    checkpoint_epoch = checkpoint["epoch"]
-    print("Loaded model weights from", args.checkpoint)
-    print("Epoch   :", checkpoint_epoch)
-    print(
-        "Metrics (Train):",
-        "IoU:",
-        checkpoint["epoch_metrics"]["train"]["jaccard"],
-        "Acc:",
-        checkpoint["epoch_metrics"]["train"]["accuracy"],
-    )
-    print(
-        "Metrics (Valid):",
-        "IoU:",
-        checkpoint["epoch_metrics"]["valid"]["jaccard"],
-        "Acc:",
-        checkpoint["epoch_metrics"]["valid"]["accuracy"],
-    )
-
-    model = get_model(args.model)
-    unpack_checkpoint(checkpoint, model=model)
-    # threshold = checkpoint["epoch_metrics"]["valid"].get("optimized_jaccard/threshold", 0.5)
-    threshold = 0.5
+    model, checkpoint = model_from_checkpoint(checkpoint_file)
+    threshold = checkpoint["epoch_metrics"].get("valid_optimized_jaccard/threshold", 0.5)
+    print(report_checkpoint(checkpoint))
     print("Using threshold", threshold)
 
     model = nn.Sequential(PickModelOutput(model, OUTPUT_MASK_KEY), nn.Sigmoid())
 
     if args.tta == "fliplr":
         model = TTAWrapper(model, fliplr_image2mask)
-    elif args.tta == "flipscale":
-        model = TTAWrapper(model, fliplr_image2mask)
-        model = MultiscaleTTAWrapper(model, size_offsets=[-128, -64, 64, 128])
     elif args.tta == "d4":
         model = TTAWrapper(model, d4_image2mask)
+    elif args.tta == "ms-d4":
+        model = TTAWrapper(model, d4_image2mask)
+        model = MultiscaleTTAWrapper(model, size_offsets=[-128, -64, 64, 128])
+    elif args.tta == "ms-d4":
+        model = MultiscaleTTAWrapper(model, size_offsets=[-128, -64, 64, 128])
     else:
         pass
 
