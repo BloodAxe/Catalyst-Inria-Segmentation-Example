@@ -187,13 +187,13 @@ def hrnet48_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True
 
 # B0-Unet
 @Model
-def b0_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True):
-    encoder = B0Encoder(pretrained=pretrained)
+def b0_unet32_s2(input_channels=3, num_classes=1, dropout=0.1, pretrained=True):
+    encoder = B0Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
     return UnetSegmentationModel(
-        encoder, num_classes=num_classes, unet_channels=[32, 64, 128], activation=ACT_SWISH, dropout=dropout
+        encoder, num_classes=num_classes, unet_channels=[16, 32, 64, 128], activation=ACT_SWISH, dropout=dropout
     )
 
 

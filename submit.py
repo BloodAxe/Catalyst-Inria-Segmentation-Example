@@ -50,10 +50,13 @@ def main():
         model = TTAWrapper(model, fliplr_image2mask)
     elif args.tta == "d4":
         model = TTAWrapper(model, d4_image2mask)
+    elif args.tta == "ms-d2":
+        model = TTAWrapper(model, fliplr_image2mask)
+        model = MultiscaleTTAWrapper(model, size_offsets=[-128, -64, 64, 128])
     elif args.tta == "ms-d4":
         model = TTAWrapper(model, d4_image2mask)
         model = MultiscaleTTAWrapper(model, size_offsets=[-128, -64, 64, 128])
-    elif args.tta == "ms-d4":
+    elif args.tta == "ms":
         model = MultiscaleTTAWrapper(model, size_offsets=[-128, -64, 64, 128])
     else:
         pass

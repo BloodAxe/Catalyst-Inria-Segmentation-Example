@@ -33,7 +33,7 @@ __all__ = [
 class B0Encoder(EncoderModule):
     def __init__(self, pretrained=True, layers=[1, 2, 3, 4]):
         encoder = tf_efficientnet_b0_ns(pretrained=pretrained, features_only=True, drop_path_rate=0.05)
-        super().__init__([24, 24, 40, 112, 320], [2, 4, 8, 16, 32], layers)
+        super().__init__([16, 24, 40, 112, 320], [2, 4, 8, 16, 32], layers)
         self.encoder = encoder
 
     def forward(self, x):
@@ -215,7 +215,7 @@ class HRNetW32Encoder(EncoderModule):
 
 
 if __name__ == "__main__":
-    encoder = B4Encoder()
+    encoder = B0Encoder(layers=[0,1,2,3,4])
     print(count_parameters(encoder))
     print(encoder.channels, encoder.strides)
 
