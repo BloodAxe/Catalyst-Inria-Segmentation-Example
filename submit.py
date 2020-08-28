@@ -64,7 +64,7 @@ def main():
 
     model = model.eval()
 
-    mask = predict(model, read_inria_image("sample_color.jpg"), image_size=(512, 512), batch_size=args.batch_size)
+    mask = predict(model, read_inria_image("sample_color.jpg"), image_size=(512, 512), batch_size=args.batch_size * torch.cuda.device_count())
     mask = ((mask > threshold) * 255).astype(np.uint8)
     name = os.path.join(run_dir, "sample_color.jpg")
     cv2.imwrite(name, mask)
@@ -82,7 +82,7 @@ def main():
     test_images = find_in_dir(os.path.join(data_dir, "test", "images"))
     for fname in tqdm(test_images, total=len(test_images)):
         image = read_inria_image(fname)
-        mask = predict(model, image, image_size=(512, 512), batch_size=args.batch_size)
+        mask = predict(model, image, image_size=(512, 512), batch_size=args.batch_size * torch.cuda.device_count())
         mask = ((mask > threshold) * 255).astype(np.uint8)
         name = os.path.join(test_predictions_dir, os.path.basename(fname))
         cv2.imwrite(name, mask)
