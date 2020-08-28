@@ -336,7 +336,7 @@ def main():
             callbacks += [
                 BCEOnlinePseudolabelingCallback2d(
                     unlabeled_train,
-                    pseudolabel_loader="label",
+                    pseudolabel_loader="infer",
                     prob_threshold=0.7,
                     output_key=OUTPUT_MASK_KEY,
                     unlabeled_class=UNLABELED_SAMPLE,
@@ -426,7 +426,7 @@ def main():
 
         callbacks += [
             MetricAggregationCallback(prefix="loss", metrics=losses, mode="sum"),
-\        ]
+        ]
 
         optimizer = get_optimizer(
             optimizer_name, get_optimizable_parameters(model), learning_rate, weight_decay=weight_decay

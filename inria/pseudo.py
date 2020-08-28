@@ -34,7 +34,7 @@ class BCEOnlinePseudolabelingCallback2d(Callback):
     def __init__(
         self,
         unlabeled_ds: PseudolabelDatasetMixin,
-        pseudolabel_loader="label",
+        pseudolabel_loader="infer",
         prob_threshold=0.9,
         sample_index_key="index",
         output_key="logits",
@@ -65,16 +65,17 @@ class BCEOnlinePseudolabelingCallback2d(Callback):
     def on_stage_start(self, runner: IRunner):
         self.last_labeled_epoch = None
 
-    def on_epoch_start(self, runner: IRunner):
-        self.should_relabel = self.last_labeled_epoch is None or (
-            runner.epoch == self.last_labeled_epoch + self.label_frequency
-        )
-        print("Should relabel", self.should_relabel, runner.epoch)
+    def on_loader_start(self, runner: IRunner):
+        if runner.loader_name == self.pseudolabel_loader:
+            self.should_relabel = self.last_labeled_epoch is None or (
+                runner.epoch == self.last_labeled_epoch + self.label_frequency
+            )
+            print("Should relabel", self.should_relabel, runner.epoch)
 
-    def on_epoch_end(self, runner: IRunner):
-        if self.should_relabel:
+    def on_loader_end(self, runner: "IRunner"):
+        if runner.loader_name == self.pseudolabel_loader and self.should_relabel:
             self.last_labeled_epoch = runner.epoch
-            print("last_labeled_epoch", runner.epoch)
+            print("Set last_labeled_epoch", runner.epoch)
 
     def get_probabilities(self, state: IRunner):
         probs = state.output[self.output_key].detach().sigmoid()
@@ -93,14 +94,14 @@ class BCEOnlinePseudolabelingCallback2d(Callback):
         probs, indexes = self.get_probabilities(runner)
 
         for p, sample_index in zip(probs, indexes):
-            confident_negatives = p < (1.0 - self.prob_threshold)
-            confident_positives = p > self.prob_threshold
-            rest = ~confident_negatives & ~confident_positives
-
-            p = p.copy()
-            p[confident_negatives] = 0 + self.label_smoothing
-            p[confident_positives] = 1 - self.label_smoothing
-            p[rest] = self.unlabeled_class
+            # confident_negatives = p < (1.0 - self.prob_threshold)
+            # confident_positives = p > self.prob_threshold
+            # rest = ~confident_negatives & ~confident_positives
+            #
+            # p = p.copy()
+            # p[confident_negatives] = 0 + self.label_smoothing
+            # p[confident_positives] = 1 - self.label_smoothing
+            # p[rest] = self.unlabeled_class
             p = np.moveaxis(p, 0, -1)
 
             self.unlabeled_ds.set_target(sample_index, p)

@@ -2,7 +2,14 @@ import albumentations as A
 import cv2
 from typing import Tuple, List
 
-__all__ = ["crop_transform", "safe_augmentations", "light_augmentations", "medium_augmentations", "hard_augmentations", "get_augmentations"]
+__all__ = [
+    "crop_transform",
+    "safe_augmentations",
+    "light_augmentations",
+    "medium_augmentations",
+    "hard_augmentations",
+    "get_augmentations",
+]
 
 
 def crop_transform(image_size: Tuple[int, int], min_scale=0.75, max_scale=1.25, input_size=5000):
@@ -37,7 +44,7 @@ def safe_augmentations() -> List[A.DualTransform]:
     ]
 
 
-def light_augmentations() -> List[A.DualTransform]:
+def light_augmentations(mask_dropout=True) -> List[A.DualTransform]:
     return [
         # D4 Augmentations
         A.RandomRotate90(p=1),
@@ -47,14 +54,14 @@ def light_augmentations() -> List[A.DualTransform]:
     ]
 
 
-def medium_augmentations() -> List[A.DualTransform]:
+def medium_augmentations(mask_dropout=True) -> List[A.DualTransform]:
     return [
         A.HorizontalFlip(),
         A.ShiftScaleRotate(scale_limit=0.1, rotate_limit=15, border_mode=cv2.BORDER_CONSTANT),
         # Add occasion blur/sharpening
         A.OneOf([A.GaussianBlur(), A.IAASharpen(), A.NoOp()]),
         # Spatial-preserving augmentations:
-        A.OneOf([A.CoarseDropout(), A.MaskDropout(max_objects=5), A.NoOp()]),
+        A.OneOf([A.CoarseDropout(), A.MaskDropout(max_objects=5) if mask_dropout else A.NoOp(), A.NoOp()]),
         A.GaussNoise(),
         A.OneOf([A.RandomBrightnessContrast(), A.CLAHE(), A.HueSaturationValue(), A.RGBShift(), A.RandomGamma()]),
         # Weather effects
@@ -62,7 +69,7 @@ def medium_augmentations() -> List[A.DualTransform]:
     ]
 
 
-def hard_augmentations() -> List[A.DualTransform]:
+def hard_augmentations(mask_dropout=True) -> List[A.DualTransform]:
     return [
         # D4 Augmentations
         A.RandomRotate90(p=1),
@@ -86,7 +93,13 @@ def hard_augmentations() -> List[A.DualTransform]:
             ]
         ),
         # Dropout & Shuffle
-        A.OneOf([A.RandomGridShuffle(), A.CoarseDropout(), A.MaskDropout(max_objects=2, mask_fill_value=0), ]),
+        A.OneOf(
+            [
+                A.RandomGridShuffle(),
+                A.CoarseDropout(),
+                A.MaskDropout(max_objects=2, mask_fill_value=0) if mask_dropout else A.NoOp(),
+            ]
+        ),
         # Add occasion blur
         A.OneOf([A.GaussianBlur(), A.GaussNoise(), A.IAAAdditiveGaussianNoise()]),
         # Weather effects

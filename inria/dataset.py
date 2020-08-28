@@ -61,8 +61,7 @@ def read_inria_mask(fname):
 
 
 def read_inria_mask_with_pseudolabel(fname):
-    mask = fs.read_image_as_is(fname)
-    mask[mask > UNLABELED_SAMPLE] = 1
+    mask = fs.read_image_as_is(fname).astype(np.float32) / 255.0
     return mask
 
 
@@ -119,8 +118,7 @@ class InriaImageMaskDataset(Dataset, PseudolabelDatasetMixin):
     def set_target(self, index: int, value: np.ndarray):
         mask_fname = self.masks[index]
 
-        value = value.astype(np.uint8)
-        value[value == 1] = 255
+        value = (value * 255).astype(np.uint8)
         cv2.imwrite(mask_fname, value)
 
     def __getitem__(self, index):
@@ -455,13 +453,13 @@ def get_pseudolabeling_dataset(
     normalize = A.Normalize()
 
     if augmentation == "hard":
-        augs = hard_augmentations()
+        augs = hard_augmentations(mask_dropout=False)
         crop = [crop_transform(image_size, input_size=768)]
     elif augmentation == "medium":
-        augs = medium_augmentations()
+        augs = medium_augmentations(mask_dropout=False)
         crop = [crop_transform(image_size, input_size=768)]
     elif augmentation == "light":
-        augs = light_augmentations()
+        augs = light_augmentations(mask_dropout=False)
         crop = [crop_transform(image_size, input_size=768)]
     else:
         augs = []
