@@ -44,7 +44,7 @@ class BCEOnlinePseudolabelingCallback2d(Callback):
     ):
         assert 1.0 > prob_threshold > 0.5
 
-        super().__init__(CallbackOrder.Other)
+        super().__init__(CallbackOrder.External)
         self.unlabeled_ds = unlabeled_ds
         self.pseudolabel_loader = pseudolabel_loader
         self.prob_threshold = prob_threshold

@@ -28,7 +28,7 @@ def split_image(image_fname, output_dir, tile_size, tile_step, image_margin):
     return fnames
 
 
-def cut_dataset_in_patches(data_dir, tile_size, tile_step, image_margin):
+def cut_train_dataset_in_patches(data_dir, tile_size, tile_step, image_margin):
 
     train_data = []
     valid_data = []
@@ -77,6 +77,21 @@ def cut_dataset_in_patches(data_dir, tile_size, tile_step, image_margin):
     return pd.DataFrame.from_dict(df)
 
 
+def cut_test_dataset_in_patches(data_dir, tile_size, tile_step, image_margin):
+    train_imgs = fs.find_images_in_dir(os.path.join(data_dir, "test", "images"))
+
+    images_dir = os.path.join(data_dir, "test_tiles", "images")
+
+    df = defaultdict(list)
+
+    for train_img in tqdm(train_imgs, total=len(train_imgs), desc="test_imgs"):
+        img_tiles = split_image(train_img, images_dir, tile_size, tile_step, image_margin)
+        df["image"].extend(img_tiles)
+        df["image_id"].extend([fs.id_from_fname(train_img)] * len(img_tiles))
+
+    return pd.DataFrame.from_dict(df)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -84,8 +99,11 @@ def main():
     )
     args = parser.parse_args()
 
-    df = cut_dataset_in_patches(args.data_dir, tile_size=(768, 768), tile_step=(512, 512), image_margin=0)
-    df.to_csv(os.path.join(args.data_dir, "inria_tiles.csv"), index=False)
+    # df = cut_train_dataset_in_patches(args.data_dir, tile_size=(768, 768), tile_step=(512, 512), image_margin=0)
+    # df.to_csv(os.path.join(args.data_dir, "inria_tiles.csv"), index=False)
+
+    df = cut_test_dataset_in_patches(args.data_dir, tile_size=(768, 768), tile_step=(512, 512), image_margin=0)
+    df.to_csv(os.path.join(args.data_dir, "test_tiles.csv"), index=False)
 
 
 if __name__ == "__main__":

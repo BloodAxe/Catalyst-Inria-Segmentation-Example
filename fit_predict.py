@@ -56,7 +56,7 @@ from inria.dataset import (
 )
 from inria.factory import predict
 from inria.losses import get_loss, AdaptiveMaskLoss2d
-from inria.metric import JaccardMetricPerImage, JaccardMetricPerImageWithOptimalThreshold
+from inria.metric import JaccardMetricPerImageWithOptimalThreshold
 from inria.models import get_model
 from inria.models.hg import SupervisedHGSegmentationModel
 from inria.optim import get_optimizer
@@ -141,8 +141,7 @@ def main():
         distributed_params = {"rank": args.local_rank, "syncbn": True}
 
     if args.fp16:
-        distributed_params["apex"] = True
-        distributed_params["opt_level"] = "O1"
+        distributed_params["amp"] = True
 
     set_manual_seed(args.seed + args.local_rank)
     catalyst.utils.set_global_seed(args.seed + args.local_rank)
@@ -235,24 +234,25 @@ def main():
         # JaccardMetricPerImage(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY, prefix="jaccard"),
         JaccardMetricPerImageWithOptimalThreshold(
             input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY, prefix="optimized_jaccard"
-        )]
+        ),
+    ]
 
     if is_master:
         default_callbacks += [
-        BestMetricCheckpointCallback(target_metric="optimized_jaccard", target_metric_minimize=False),
-        HyperParametersCallback(
-            hparam_dict={
-                "model": model_name,
-                "scheduler": scheduler_name,
-                "optimizer": optimizer_name,
-                "augmentations": augmentations,
-                "size": args.size,
-                "weight_decay": weight_decay,
-                "epochs": num_epochs,
-                "dropout": None if dropout is None else float(dropout)
-            }
-        ),
-    ]
+            BestMetricCheckpointCallback(target_metric="optimized_jaccard", target_metric_minimize=False),
+            HyperParametersCallback(
+                hparam_dict={
+                    "model": model_name,
+                    "scheduler": scheduler_name,
+                    "optimizer": optimizer_name,
+                    "augmentations": augmentations,
+                    "size": args.size,
+                    "weight_decay": weight_decay,
+                    "epochs": num_epochs,
+                    "dropout": None if dropout is None else float(dropout),
+                }
+            ),
+        ]
 
     if show and is_master:
         visualize_inria_predictions = partial(
@@ -310,8 +310,18 @@ def main():
                 data_dir, include_masks=True, augmentation=augmentations, image_size=image_size
             )
 
-            loaders["label"] = DataLoader(
-                unlabeled_label, batch_size=batch_size // 2, num_workers=num_workers, pin_memory=True
+            if args.distributed:
+                label_sampler = DistributedSampler(unlabeled_label, args.world_size, args.local_rank, shuffle=False)
+            else:
+                label_sampler = None
+
+            loaders["infer"] = DataLoader(
+                unlabeled_label,
+                batch_size=batch_size // 2,
+                num_workers=num_workers,
+                pin_memory=True,
+                sampler=label_sampler,
+                drop_last=False,
             )
 
             if train_sampler is not None:
@@ -383,7 +393,7 @@ def main():
             criterions_dict[criterions] = AdaptiveMaskLoss2d(get_loss(dsv_loss_name, ignore_index=ignore_index))
 
             for i, dsv_input in enumerate(
-                    [OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY, OUTPUT_MASK_32_KEY]
+                [OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY, OUTPUT_MASK_32_KEY]
             ):
                 criterion_callback = CriterionCallback(
                     prefix=f"{dsv_input}/" + dsv_loss_name,
@@ -416,8 +426,7 @@ def main():
 
         callbacks += [
             MetricAggregationCallback(prefix="loss", metrics=losses, mode="sum"),
-            OptimizerCallback(accumulation_steps=accumulation_steps, decouple_weight_decay=False),
-        ]
+\        ]
 
         optimizer = get_optimizer(
             optimizer_name, get_optimizable_parameters(model), learning_rate, weight_decay=weight_decay

@@ -453,18 +453,21 @@ def get_pseudolabeling_dataset(
     masks = [os.path.join(masks_dir, fs.id_from_fname(image_fname) + ".png") for image_fname in images]
 
     normalize = A.Normalize()
-    crop = crop_transform(image_size, input_size=768)
 
     if augmentation == "hard":
         augs = hard_augmentations()
+        crop = [crop_transform(image_size, input_size=768)]
     elif augmentation == "medium":
         augs = medium_augmentations()
+        crop = [crop_transform(image_size, input_size=768)]
     elif augmentation == "light":
         augs = light_augmentations()
+        crop = [crop_transform(image_size, input_size=768)]
     else:
         augs = []
+        crop = []
 
-    transfrom = A.Compose(crop + augs + normalize)
+    transfrom = A.Compose(crop + augs + [normalize])
     return InriaImageMaskDataset(
         images,
         masks if include_masks else None,
