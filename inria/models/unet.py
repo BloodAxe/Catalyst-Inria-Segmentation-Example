@@ -6,7 +6,7 @@ from pytorch_toolbelt.modules import conv1x1, UnetBlock, ACT_RELU, ABN, ACT_SWIS
 from pytorch_toolbelt.modules import encoders as E
 from pytorch_toolbelt.modules.decoders import UNetDecoder
 from pytorch_toolbelt.modules.encoders import EncoderModule
-from .timm_encoders import B4Encoder, B0Encoder
+from .timm_encoders import B4Encoder, B0Encoder, B6Encoder
 from torch import nn, Tensor
 from torch.nn import functional as F
 
@@ -210,6 +210,16 @@ def b4_unet32(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):
 @Model
 def b4_unet32_s2(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):
     encoder = B4Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
+    if input_channels != 3:
+        encoder.change_input_channels(input_channels)
+
+    return UnetSegmentationModel(
+        encoder, num_classes=num_classes, unet_channels=[32, 64, 128, 256], activation=ACT_SWISH, dropout=dropout
+    )
+
+@Model
+def b6_unet32_s2(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):
+    encoder = B6Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
