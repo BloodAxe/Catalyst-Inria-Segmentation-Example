@@ -24,7 +24,7 @@ __all__ = [
     "densenet161_unet32",
     "densenet169_unet32",
     "densenet201_unet32",
-    "b0_unet32",
+    "b0_unet32_s2",
     "b4_unet32",
 ]
 
@@ -216,6 +216,7 @@ def b4_unet32_s2(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):
     return UnetSegmentationModel(
         encoder, num_classes=num_classes, unet_channels=[32, 64, 128, 256], activation=ACT_SWISH, dropout=dropout
     )
+
 
 @Model
 def b6_unet32_s2(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):

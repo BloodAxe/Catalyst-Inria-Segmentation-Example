@@ -3,7 +3,7 @@ from typing import Tuple, Dict
 import torch
 from torch import nn
 
-from . import fpn, unet, deeplab, hrnet, hg, can
+from . import fpn, unet, deeplab, hrnet, hg, can, efficient_unet
 
 __all__ = ["get_model", "model_from_checkpoint"]
 
