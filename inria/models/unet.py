@@ -38,6 +38,7 @@ class UnetSegmentationModel(nn.Module):
             dropout=0.25,
             full_size_mask=True,
             activation=ACT_RELU,
+            upsample_block=nn.UpsamplingNearest2d
     ):
         super().__init__()
         self.encoder = encoder
@@ -47,7 +48,7 @@ class UnetSegmentationModel(nn.Module):
             feature_maps=encoder.channels,
             decoder_features=unet_channels,
             unet_block=partial(UnetBlock, abn_block=abn_block),
-            upsample_block=nn.UpsamplingNearest2d,
+            upsample_block=upsample_block,
         )
 
         self.mask = nn.Sequential(
@@ -227,3 +228,16 @@ def b6_unet32_s2(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):
     return UnetSegmentationModel(
         encoder, num_classes=num_classes, unet_channels=[32, 64, 128, 256], activation=ACT_SWISH, dropout=dropout
     )
+
+@Model
+def b6_unet32_s2_bi(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):
+    encoder = B6Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
+    if input_channels != 3:
+        encoder.change_input_channels(input_channels)
+
+    return UnetSegmentationModel(
+        encoder, num_classes=num_classes, unet_channels=[32, 64, 128, 256], activation=ACT_SWISH,
+        dropout=dropout,
+        upsample_block=nn.UpsamplingBilinear2d
+    )
+
