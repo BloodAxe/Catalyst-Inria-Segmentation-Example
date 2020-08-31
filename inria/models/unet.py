@@ -44,6 +44,7 @@ class UnetSegmentationModel(nn.Module):
         activation=ACT_RELU,
         upsample_block=nn.UpsamplingNearest2d,
         need_supervision_masks=False,
+        last_upsample_block=None,
     ):
         super().__init__()
         self.encoder = encoder
@@ -56,9 +57,22 @@ class UnetSegmentationModel(nn.Module):
             upsample_block=upsample_block,
         )
 
-        self.mask = nn.Sequential(
-            OrderedDict([("drop", nn.Dropout2d(dropout)), ("conv", conv1x1(unet_channels[0], num_classes))])
-        )
+        if last_upsample_block is not None:
+            self.last_upsample_block = last_upsample_block(unet_channels[0])
+            self.mask = nn.Sequential(
+                OrderedDict(
+                    [
+                        ("drop", nn.Dropout2d(dropout)),
+                        ("conv", conv1x1(self.last_upsample_block.out_channels, num_classes)),
+                    ]
+                )
+            )
+        else:
+            self.last_upsample_block = None
+
+            self.mask = nn.Sequential(
+                OrderedDict([("drop", nn.Dropout2d(dropout)), ("conv", conv1x1(unet_channels[0], num_classes))])
+            )
 
         if need_supervision_masks:
             self.supervision = nn.ModuleList([conv1x1(channels, num_classes) for channels in self.decoder.channels])
@@ -75,10 +89,12 @@ class UnetSegmentationModel(nn.Module):
         x = self.decoder(x)
 
         # Decode mask
-        mask = self.mask(x[0])
-
-        if self.full_size_mask:
-            mask = F.interpolate(mask, size=x_size[2:], mode="bilinear", align_corners=False)
+        if self.last_upsample_block is not None:
+            mask = self.mask(self.last_upsample_block(x[0]))
+        else:
+            mask = self.mask(x[0])
+            if self.full_size_mask:
+                mask = F.interpolate(mask, size=x_size[2:], mode="bilinear", align_corners=False)
 
         output = {OUTPUT_MASK_KEY: mask}
 
@@ -298,4 +314,5 @@ def b6_unet32_s2_rdtc(input_channels=3, num_classes=1, dropout=0.2, need_supervi
         dropout=dropout,
         need_supervision_masks=need_supervision_masks,
         upsample_block=ResidualDeconvolutionUpsample2d,
+        last_upsample_block=ResidualDeconvolutionUpsample2d,
     )

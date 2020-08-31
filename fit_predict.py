@@ -6,6 +6,7 @@ import json
 import os
 from datetime import datetime
 from functools import partial
+from typing import List, Tuple, Dict
 
 import catalyst
 import cv2
@@ -19,6 +20,7 @@ from catalyst.dl import (
     OptimizerCallback,
     SchedulerCallback,
     MetricAggregationCallback,
+    Callback,
 )
 from catalyst.utils import load_checkpoint, unpack_checkpoint
 from pytorch_toolbelt.optimization.functional import get_optimizable_parameters
@@ -73,7 +75,7 @@ def get_criterions(
     criterions_stride16=None,
     criterions_stride32=None,
     ignore_index=None,
-):
+) -> Tuple[List[Callback], Dict]:
     criterions_dict = {}
     losses = []
     callbacks = []
@@ -117,7 +119,7 @@ def get_criterions(
                 print("Using loss", loss_name, loss_weight)
 
     callbacks.append(MetricAggregationCallback(prefix="loss", metrics=losses, mode="sum"))
-    return callbacks, losses
+    return callbacks, criterions_dict
 
 
 def main():
@@ -468,21 +470,6 @@ def main():
         loaders["valid"] = DataLoader(
             valid_ds, batch_size=batch_size, num_workers=num_workers, pin_memory=True, sampler=valid_sampler
         )
-
-        # Create losses
-        for loss_name, loss_weight in criterions:
-            criterion_callback = CriterionCallback(
-                prefix=f"{INPUT_MASK_KEY}/" + loss_name,
-                input_key=INPUT_MASK_KEY if loss_name != "wbce" else [INPUT_MASK_KEY, INPUT_MASK_WEIGHT_KEY],
-                output_key=OUTPUT_MASK_KEY,
-                criterion_key=loss_name,
-                multiplier=float(loss_weight),
-            )
-
-            criterions_dict[loss_name] = get_loss(loss_name, ignore_index=ignore_index)
-            callbacks.append(criterion_callback)
-            losses.append(criterion_callback.prefix)
-            print("Using loss", loss_name, loss_weight)
 
         loss_callbacks, loss_criterions = get_criterions(
             criterions, criterions2, criterions4, criterions8, criterions16, criterions32
