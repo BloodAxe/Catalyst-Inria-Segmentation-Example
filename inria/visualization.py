@@ -4,7 +4,14 @@ import cv2
 import numpy as np
 from pytorch_toolbelt.utils.torch_utils import rgb_image_from_tensor, to_numpy
 
-from inria.dataset import OUTPUT_OFFSET_KEY, OUTPUT_MASK_4_KEY
+from inria.dataset import (
+    OUTPUT_OFFSET_KEY,
+    OUTPUT_MASK_4_KEY,
+    OUTPUT_MASK_32_KEY,
+    OUTPUT_MASK_16_KEY,
+    OUTPUT_MASK_8_KEY,
+    OUTPUT_MASK_2_KEY,
+)
 
 
 def draw_inria_predictions(
@@ -94,7 +101,7 @@ def draw_inria_predictions(
             offset = cv2.resize(offset, (image.shape[1], image.shape[0]))
             overlay = np.row_stack([overlay, offset])
 
-        dsv_inputs = [OUTPUT_MASK_4_KEY + "_after_hg_" + str(i) for i in range(8)]
+        dsv_inputs = [OUTPUT_MASK_2_KEY, OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY, OUTPUT_MASK_32_KEY]
         for dsv_input_key in dsv_inputs:
             if dsv_input_key in output:
                 dsv_p = to_numpy(output[dsv_input_key][i].detach().sigmoid().squeeze(0))
