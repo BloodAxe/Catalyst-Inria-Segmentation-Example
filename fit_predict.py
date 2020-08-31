@@ -166,7 +166,7 @@ def main():
         required=False,
         action="append",
         nargs="+",
-        help="Criterion for stride 2 mask",
+        help="Criterion for stride 4 mask",
     )
     parser.add_argument(
         "-l8",
@@ -175,7 +175,7 @@ def main():
         required=False,
         action="append",
         nargs="+",
-        help="Criterion for stride 2 mask",
+        help="Criterion for stride 8 mask",
     )
     parser.add_argument(
         "-l16",
@@ -184,7 +184,16 @@ def main():
         required=False,
         action="append",
         nargs="+",
-        help="Criterion for stride 2 mask",
+        help="Criterion for stride 16 mask",
+    )
+    parser.add_argument(
+        "-l32",
+        "--criterion-stride-16",
+        type=str,
+        required=False,
+        action="append",
+        nargs="+",
+        help="Criterion for stride 32 mask",
     )
     parser.add_argument("-o", "--optimizer", default="RAdam", help="Name of the optimizer")
     parser.add_argument(
@@ -266,7 +275,6 @@ def main():
 
     verbose = args.verbose
     show = args.show
-    use_dsv = args.dsv
     accumulation_steps = args.accumulation_steps
     weight_decay = args.weight_decay
     extra_data_xview2 = args.data_dir_xview2
