@@ -99,7 +99,7 @@ def get_criterions(
         [OUTPUT_MASK_2_KEY, OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY],
     ):
         if supervision_losses is not None:
-            for loss_name, loss_weight in criterions:
+            for loss_name, loss_weight in supervision_losses:
                 prefix = f"{supervision_output}/" + loss_name
                 criterion_callback = CriterionCallback(
                     prefix=prefix,
