@@ -30,7 +30,7 @@ def test_b6_unet32_s2_tc():
 
 @torch.no_grad()
 def test_b6_unet32_s2_rdtc():
-    model = b6_unet32_s2_rdtc()
+    model = b6_unet32_s2_rdtc(need_supervision_masks=True)
     model = maybe_cuda(model.eval())
     x = maybe_cuda(torch.rand((2, 3, 512, 512)))
     output = model(x)

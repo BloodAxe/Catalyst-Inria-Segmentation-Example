@@ -53,16 +53,71 @@ from inria.dataset import (
     INPUT_IMAGE_ID_KEY,
     get_xview2_extra_dataset,
     INPUT_MASK_WEIGHT_KEY,
+    OUTPUT_MASK_2_KEY,
 )
 from inria.factory import predict
-from inria.losses import get_loss, AdaptiveMaskLoss2d
+from inria.losses import get_loss, ResizeTargetToPrediction2d
 from inria.metric import JaccardMetricPerImageWithOptimalThreshold
 from inria.models import get_model
-from inria.models.hg import SupervisedHGSegmentationModel
 from inria.optim import get_optimizer
 from inria.pseudo import BCEOnlinePseudolabelingCallback2d
 from inria.scheduler import get_scheduler
 from inria.visualization import draw_inria_predictions
+
+
+def get_criterions(
+    criterions,
+    criterions_stride2=None,
+    criterions_stride4=None,
+    criterions_stride8=None,
+    criterions_stride16=None,
+    criterions_stride32=None,
+    ignore_index=None,
+):
+    criterions_dict = {}
+    losses = []
+    callbacks = []
+
+    # Create main losses
+    for loss_name, loss_weight in criterions:
+        criterion_callback = CriterionCallback(
+            prefix=f"{OUTPUT_MASK_KEY}/" + loss_name,
+            input_key=INPUT_MASK_KEY if loss_name != "wbce" else [INPUT_MASK_KEY, INPUT_MASK_WEIGHT_KEY],
+            output_key=OUTPUT_MASK_KEY,
+            criterion_key=f"{OUTPUT_MASK_KEY}/" + loss_name,
+            multiplier=float(loss_weight),
+        )
+
+        criterions_dict[criterion_callback.criterion_key] = get_loss(loss_name, ignore_index=ignore_index)
+        callbacks.append(criterion_callback)
+        losses.append(criterion_callback.prefix)
+        print("Using loss", loss_name, loss_weight)
+
+    # Additional supervision losses
+    for supervision_losses, supervision_output in zip(
+        [criterions_stride2, criterions_stride4, criterions_stride8, criterions_stride16, criterions_stride32],
+        [OUTPUT_MASK_2_KEY, OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY, OUTPUT_MASK_32_KEY],
+    ):
+        if supervision_losses is not None:
+            for loss_name, loss_weight in criterions:
+                prefix = f"{supervision_output}/" + loss_name
+                criterion_callback = CriterionCallback(
+                    prefix=prefix,
+                    input_key=INPUT_MASK_KEY if loss_name != "wbce" else [INPUT_MASK_KEY, INPUT_MASK_WEIGHT_KEY],
+                    output_key=supervision_output,
+                    criterion_key=prefix,
+                    multiplier=float(loss_weight),
+                )
+
+                criterions_dict[criterion_callback.criterion_key] = ResizeTargetToPrediction2d(
+                    get_loss(loss_name, ignore_index=ignore_index)
+                )
+                callbacks.append(criterion_callback)
+                losses.append(criterion_callback.prefix)
+                print("Using loss", loss_name, loss_weight)
+
+    callbacks.append(MetricAggregationCallback(prefix="loss", metrics=losses, mode="sum"))
+    return callbacks, losses
 
 
 def main():
@@ -95,6 +150,42 @@ def main():
     # parser.add_argument('-ft', '--fine-tune', action='store_true')
     parser.add_argument("-lr", "--learning-rate", type=float, default=1e-3, help="Initial learning rate")
     parser.add_argument("-l", "--criterion", type=str, required=True, action="append", nargs="+", help="Criterion")
+    parser.add_argument(
+        "-l2",
+        "--criterion-stride-2",
+        type=str,
+        required=False,
+        action="append",
+        nargs="+",
+        help="Criterion for stride 2 mask",
+    )
+    parser.add_argument(
+        "-l4",
+        "--criterion-stride-4",
+        type=str,
+        required=False,
+        action="append",
+        nargs="+",
+        help="Criterion for stride 2 mask",
+    )
+    parser.add_argument(
+        "-l8",
+        "--criterion-stride-8",
+        type=str,
+        required=False,
+        action="append",
+        nargs="+",
+        help="Criterion for stride 2 mask",
+    )
+    parser.add_argument(
+        "-l16",
+        "--criterion-stride-16",
+        type=str,
+        required=False,
+        action="append",
+        nargs="+",
+        help="Criterion for stride 2 mask",
+    )
     parser.add_argument("-o", "--optimizer", default="RAdam", help="Name of the optimizer")
     parser.add_argument(
         "-c", "--checkpoint", type=str, default=None, help="Checkpoint filename to use as initial model weights"
@@ -167,6 +258,12 @@ def main():
     dropout = args.dropout
     online_pseudolabeling = args.opl
     criterions = args.criterion
+    criterions2 = args.criterion2
+    criterions4 = args.criterion4
+    criterions8 = args.criterion8
+    criterions16 = args.criterion16
+    criterions32 = args.criterion32
+
     verbose = args.verbose
     show = args.show
     use_dsv = args.dsv
@@ -180,6 +277,10 @@ def main():
     custom_model_kwargs = {}
     if dropout is not None:
         custom_model_kwargs["dropout"] = float(dropout)
+
+    if any([criterions2, criterions4, criterions8, criterions16, criterions32]):
+        custom_model_kwargs["need_supervision_masks"] = True
+        print("Enabling supervision masks")
 
     model: nn.Module = get_model(model_name, **custom_model_kwargs).cuda()
 
@@ -375,48 +476,10 @@ def main():
             losses.append(criterion_callback.prefix)
             print("Using loss", loss_name, loss_weight)
 
-        if use_dsv:
-            print("Using DSV")
-            criterions = "dsv"
-            dsv_loss_name = "soft_bce"
-
-            criterions_dict[criterions] = AdaptiveMaskLoss2d(get_loss(dsv_loss_name, ignore_index=ignore_index))
-
-            for i, dsv_input in enumerate(
-                [OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY, OUTPUT_MASK_32_KEY]
-            ):
-                criterion_callback = CriterionCallback(
-                    prefix=f"{dsv_input}/" + dsv_loss_name,
-                    input_key=INPUT_MASK_KEY,
-                    output_key=dsv_input,
-                    criterion_key=criterions,
-                    multiplier=1.0,
-                )
-                callbacks.append(criterion_callback)
-                losses.append(criterion_callback.prefix)
-
-        if isinstance(model, SupervisedHGSegmentationModel):
-            print("Using Hourglass DSV")
-            dsv_loss_name = "kl"
-
-            criterions_dict["dsv"] = get_loss(dsv_loss_name, ignore_index=ignore_index)
-            num_supervision_inputs = model.encoder.num_blocks - 1
-            dsv_outputs = [OUTPUT_MASK_4_KEY + "_after_hg_" + str(i) for i in range(num_supervision_inputs)]
-
-            for i, dsv_input in enumerate(dsv_outputs):
-                criterion_callback = CriterionCallback(
-                    prefix="supervision/" + dsv_input,
-                    input_key=INPUT_MASK_KEY,
-                    output_key=dsv_input,
-                    criterion_key="dsv",
-                    multiplier=(i + 1) / num_supervision_inputs,
-                )
-                callbacks.append(criterion_callback)
-                losses.append(criterion_callback.prefix)
-
-        callbacks += [
-            MetricAggregationCallback(prefix="loss", metrics=losses, mode="sum"),
-        ]
+        loss_callbacks, loss_criterions = get_criterions(
+            criterions, criterions2, criterions4, criterions8, criterions16, criterions32
+        )
+        callbacks += loss_callbacks
 
         optimizer = get_optimizer(
             optimizer_name, get_optimizable_parameters(model), learning_rate, weight_decay=weight_decay
@@ -466,7 +529,7 @@ def main():
         runner.train(
             fp16=distributed_params,
             model=model,
-            criterion=criterions_dict,
+            criterion=loss_criterions,
             optimizer=optimizer,
             scheduler=scheduler,
             callbacks=callbacks,

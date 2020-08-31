@@ -26,10 +26,16 @@ OUTPUT_OFFSET_KEY = "pred_offset"
 INPUT_INDEX_KEY = "index"
 
 # Smaller masks for deep supervision
-OUTPUT_MASK_4_KEY = "pred_mask_4"
-OUTPUT_MASK_8_KEY = "pred_mask_8"
-OUTPUT_MASK_16_KEY = "pred_mask_16"
-OUTPUT_MASK_32_KEY = "pred_mask_32"
+def output_mask_name_for_stride(stride: int):
+    return f"pred_mask_{stride}"
+
+
+OUTPUT_MASK_2_KEY = output_mask_name_for_stride(2)
+OUTPUT_MASK_4_KEY = output_mask_name_for_stride(4)
+OUTPUT_MASK_8_KEY = output_mask_name_for_stride(8)
+OUTPUT_MASK_16_KEY = output_mask_name_for_stride(16)
+OUTPUT_MASK_32_KEY = output_mask_name_for_stride(32)
+
 
 OUTPUT_CLASS_KEY = "pred_classes"
 
