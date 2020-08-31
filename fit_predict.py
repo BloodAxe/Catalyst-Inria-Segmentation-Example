@@ -152,7 +152,7 @@ def main():
     parser.add_argument("-l", "--criterion", type=str, required=True, action="append", nargs="+", help="Criterion")
     parser.add_argument(
         "-l2",
-        "--criterion-stride-2",
+        "--criterion2",
         type=str,
         required=False,
         action="append",
@@ -161,7 +161,7 @@ def main():
     )
     parser.add_argument(
         "-l4",
-        "--criterion-stride-4",
+        "--criterion4",
         type=str,
         required=False,
         action="append",
@@ -170,7 +170,7 @@ def main():
     )
     parser.add_argument(
         "-l8",
-        "--criterion-stride-8",
+        "--criterion8",
         type=str,
         required=False,
         action="append",
@@ -179,7 +179,7 @@ def main():
     )
     parser.add_argument(
         "-l16",
-        "--criterion-stride-16",
+        "--criterion16",
         type=str,
         required=False,
         action="append",
@@ -188,7 +188,7 @@ def main():
     )
     parser.add_argument(
         "-l32",
-        "--criterion-stride-32",
+        "--criterion32",
         type=str,
         required=False,
         action="append",
