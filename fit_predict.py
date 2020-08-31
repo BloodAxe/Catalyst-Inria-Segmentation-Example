@@ -51,7 +51,6 @@ from inria.dataset import (
     OUTPUT_MASK_8_KEY,
     OUTPUT_MASK_4_KEY,
     OUTPUT_MASK_16_KEY,
-    OUTPUT_MASK_32_KEY,
     INPUT_IMAGE_ID_KEY,
     get_xview2_extra_dataset,
     INPUT_MASK_WEIGHT_KEY,
@@ -73,7 +72,6 @@ def get_criterions(
     criterions_stride4=None,
     criterions_stride8=None,
     criterions_stride16=None,
-    criterions_stride32=None,
     ignore_index=None,
 ) -> Tuple[List[Callback], Dict]:
     criterions_dict = {}
@@ -97,8 +95,8 @@ def get_criterions(
 
     # Additional supervision losses
     for supervision_losses, supervision_output in zip(
-        [criterions_stride2, criterions_stride4, criterions_stride8, criterions_stride16, criterions_stride32],
-        [OUTPUT_MASK_2_KEY, OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY, OUTPUT_MASK_32_KEY],
+        [criterions_stride2, criterions_stride4, criterions_stride8, criterions_stride16],
+        [OUTPUT_MASK_2_KEY, OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY],
     ):
         if supervision_losses is not None:
             for loss_name, loss_weight in criterions:
@@ -188,15 +186,7 @@ def main():
         nargs="+",
         help="Criterion for stride 16 mask",
     )
-    parser.add_argument(
-        "-l32",
-        "--criterion32",
-        type=str,
-        required=False,
-        action="append",
-        nargs="+",
-        help="Criterion for stride 32 mask",
-    )
+
     parser.add_argument("-o", "--optimizer", default="RAdam", help="Name of the optimizer")
     parser.add_argument(
         "-c", "--checkpoint", type=str, default=None, help="Checkpoint filename to use as initial model weights"
@@ -273,7 +263,6 @@ def main():
     criterions4 = args.criterion4
     criterions8 = args.criterion8
     criterions16 = args.criterion16
-    criterions32 = args.criterion32
 
     verbose = args.verbose
     show = args.show
@@ -288,7 +277,7 @@ def main():
     if dropout is not None:
         custom_model_kwargs["dropout"] = float(dropout)
 
-    if any([criterions2, criterions4, criterions8, criterions16, criterions32]):
+    if any([criterions2, criterions4, criterions8, criterions16]):
         custom_model_kwargs["need_supervision_masks"] = True
         print("Enabling supervision masks")
 
@@ -472,7 +461,7 @@ def main():
         )
 
         loss_callbacks, loss_criterions = get_criterions(
-            criterions, criterions2, criterions4, criterions8, criterions16, criterions32
+            criterions, criterions2, criterions4, criterions8, criterions16
         )
         callbacks += loss_callbacks
 
