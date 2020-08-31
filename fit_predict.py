@@ -188,7 +188,7 @@ def main():
     )
     parser.add_argument(
         "-l32",
-        "--criterion-stride-16",
+        "--criterion-stride-32",
         type=str,
         required=False,
         action="append",
