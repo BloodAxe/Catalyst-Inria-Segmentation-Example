@@ -104,7 +104,7 @@ def draw_inria_predictions(
         dsv_inputs = [OUTPUT_MASK_2_KEY, OUTPUT_MASK_4_KEY, OUTPUT_MASK_8_KEY, OUTPUT_MASK_16_KEY, OUTPUT_MASK_32_KEY]
         for dsv_input_key in dsv_inputs:
             if dsv_input_key in output:
-                dsv_p = to_numpy(output[dsv_input_key][i].detach().sigmoid().squeeze(0))
+                dsv_p = to_numpy(output[dsv_input_key][i].detach().float().sigmoid().squeeze(0))
                 dsv_p = cv2.resize((dsv_p * 255).astype(np.uint8), (image.shape[1], image.shape[0]))
                 dsv_p = cv2.cvtColor(dsv_p, cv2.COLOR_GRAY2RGB)
                 overlay = np.row_stack([overlay, dsv_p])
