@@ -26,19 +26,23 @@ __all__ = [
     "densenet201_unet32",
     "b0_unet32_s2",
     "b4_unet32",
+    "b6_unet32_s2",
+    "b6_unet32_s2_bi",
+    "b6_unet32_s2_tc",
+    "b6_unet32_s2_rdtc",
 ]
 
 
 class UnetSegmentationModel(nn.Module):
     def __init__(
-            self,
-            encoder: EncoderModule,
-            unet_channels: Union[int, List[int]],
-            num_classes: int = 1,
-            dropout=0.25,
-            full_size_mask=True,
-            activation=ACT_RELU,
-            upsample_block=nn.UpsamplingNearest2d
+        self,
+        encoder: EncoderModule,
+        unet_channels: Union[int, List[int]],
+        num_classes: int = 1,
+        dropout=0.25,
+        full_size_mask=True,
+        activation=ACT_RELU,
+        upsample_block=nn.UpsamplingNearest2d,
     ):
         super().__init__()
         self.encoder = encoder
@@ -208,6 +212,7 @@ def b4_unet32(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):
         encoder, num_classes=num_classes, unet_channels=[32, 64, 128], activation=ACT_SWISH, dropout=dropout
     )
 
+
 @Model
 def b4_unet32_s2(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):
     encoder = B4Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
@@ -229,6 +234,7 @@ def b6_unet32_s2(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):
         encoder, num_classes=num_classes, unet_channels=[32, 64, 128, 256], activation=ACT_SWISH, dropout=dropout
     )
 
+
 @Model
 def b6_unet32_s2_bi(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):
     encoder = B6Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
@@ -236,8 +242,46 @@ def b6_unet32_s2_bi(input_channels=3, num_classes=1, dropout=0.2, pretrained=Tru
         encoder.change_input_channels(input_channels)
 
     return UnetSegmentationModel(
-        encoder, num_classes=num_classes, unet_channels=[32, 64, 128, 256], activation=ACT_SWISH,
+        encoder,
+        num_classes=num_classes,
+        unet_channels=[32, 64, 128, 256],
+        activation=ACT_SWISH,
         dropout=dropout,
-        upsample_block=nn.UpsamplingBilinear2d
+        upsample_block=nn.UpsamplingBilinear2d,
     )
 
+
+@Model
+def b6_unet32_s2_tc(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):
+    encoder = B6Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
+    if input_channels != 3:
+        encoder.change_input_channels(input_channels)
+
+    from pytorch_toolbelt.modules.upsample import DeconvolutionUpsample2d
+
+    return UnetSegmentationModel(
+        encoder,
+        num_classes=num_classes,
+        unet_channels=[32, 64, 128, 256],
+        activation=ACT_SWISH,
+        dropout=dropout,
+        upsample_block=DeconvolutionUpsample2d,
+    )
+
+
+@Model
+def b6_unet32_s2_rdtc(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):
+    encoder = B6Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
+    if input_channels != 3:
+        encoder.change_input_channels(input_channels)
+
+    from pytorch_toolbelt.modules.upsample import ResidualDeconvolutionUpsample2d
+
+    return UnetSegmentationModel(
+        encoder,
+        num_classes=num_classes,
+        unet_channels=[32, 64, 128, 256],
+        activation=ACT_SWISH,
+        dropout=dropout,
+        upsample_block=ResidualDeconvolutionUpsample2d,
+    )

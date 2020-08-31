@@ -218,17 +218,6 @@ def main():
     if experiment is not None:
         checkpoint_prefix = experiment
 
-    if args.distributed:
-        checkpoint_prefix += f"_local_rank_{args.local_rank}"
-
-    log_dir = os.path.join("runs", checkpoint_prefix)
-    os.makedirs(log_dir, exist_ok=False)
-
-    config_fname = os.path.join(log_dir, f"{checkpoint_prefix}.json")
-    with open(config_fname, "w") as f:
-        train_session_args = vars(args)
-        f.write(json.dumps(train_session_args, indent=2))
-
     default_callbacks = [
         PixelAccuracyCallback(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY),
         # JaccardMetricPerImage(input_key=INPUT_MASK_KEY, output_key=OUTPUT_MASK_KEY, prefix="jaccard"),
@@ -238,6 +227,7 @@ def main():
     ]
 
     if is_master:
+
         default_callbacks += [
             BestMetricCheckpointCallback(target_metric="optimized_jaccard", target_metric_minimize=False),
             HyperParametersCallback(
@@ -254,19 +244,19 @@ def main():
             ),
         ]
 
-    if show and is_master:
-        visualize_inria_predictions = partial(
-            draw_inria_predictions,
-            image_key=INPUT_IMAGE_KEY,
-            image_id_key=INPUT_IMAGE_ID_KEY,
-            targets_key=INPUT_MASK_KEY,
-            outputs_key=OUTPUT_MASK_KEY,
-            max_images=16,
-        )
-        default_callbacks += [
-            ShowPolarBatchesCallback(visualize_inria_predictions, metric="accuracy", minimize=False),
-            ShowPolarBatchesCallback(visualize_inria_predictions, metric="loss", minimize=True),
-        ]
+        if show:
+            visualize_inria_predictions = partial(
+                draw_inria_predictions,
+                image_key=INPUT_IMAGE_KEY,
+                image_id_key=INPUT_IMAGE_ID_KEY,
+                targets_key=INPUT_MASK_KEY,
+                outputs_key=OUTPUT_MASK_KEY,
+                max_images=16,
+            )
+            default_callbacks += [
+                ShowPolarBatchesCallback(visualize_inria_predictions, metric="accuracy", minimize=False),
+                ShowPolarBatchesCallback(visualize_inria_predictions, metric="loss", minimize=True),
+            ]
 
     train_ds, valid_ds, train_sampler = get_datasets(
         data_dir=data_dir,
@@ -437,30 +427,39 @@ def main():
         if isinstance(scheduler, (CyclicLR, OneCycleLRWithWarmup)):
             callbacks += [SchedulerCallback(mode="batch")]
 
-        print("Train session    :", checkpoint_prefix)
-        print("  FP16 mode      :", fp16)
-        print("  Fast mode      :", args.fast)
-        print("  Train mode     :", train_mode)
-        print("  Epochs         :", num_epochs)
-        print("  Workers        :", num_workers)
-        print("  Data dir       :", data_dir)
-        print("  Log dir        :", log_dir)
-        print("  Augmentations  :", augmentations)
-        print("  Train size     :", "batches", len(loaders["train"]), "dataset", len(train_ds))
-        print("  Valid size     :", "batches", len(loaders["valid"]), "dataset", len(valid_ds))
-        print("Model            :", model_name)
-        print("  Parameters     :", count_parameters(model))
-        print("  Image size     :", image_size)
-        print("Optimizer        :", optimizer_name)
-        print("  Learning rate  :", learning_rate)
-        print("  Batch size     :", batch_size)
-        print("  Criterion      :", criterions)
-        print("  Use weight mask:", need_weight_mask)
-        if args.distributed:
-            print("Distributed")
-            print("  World size     :", args.world_size)
-            print("  Local rank     :", args.local_rank)
-            print("  Is master      :", args.is_master)
+        log_dir = os.path.join("runs", checkpoint_prefix)
+
+        if is_master:
+            os.makedirs(log_dir, exist_ok=False)
+            config_fname = os.path.join(log_dir, f"{checkpoint_prefix}.json")
+            with open(config_fname, "w") as f:
+                train_session_args = vars(args)
+                f.write(json.dumps(train_session_args, indent=2))
+
+            print("Train session    :", checkpoint_prefix)
+            print("  FP16 mode      :", fp16)
+            print("  Fast mode      :", args.fast)
+            print("  Train mode     :", train_mode)
+            print("  Epochs         :", num_epochs)
+            print("  Workers        :", num_workers)
+            print("  Data dir       :", data_dir)
+            print("  Log dir        :", log_dir)
+            print("  Augmentations  :", augmentations)
+            print("  Train size     :", "batches", len(loaders["train"]), "dataset", len(train_ds))
+            print("  Valid size     :", "batches", len(loaders["valid"]), "dataset", len(valid_ds))
+            print("Model            :", model_name)
+            print("  Parameters     :", count_parameters(model))
+            print("  Image size     :", image_size)
+            print("Optimizer        :", optimizer_name)
+            print("  Learning rate  :", learning_rate)
+            print("  Batch size     :", batch_size)
+            print("  Criterion      :", criterions)
+            print("  Use weight mask:", need_weight_mask)
+            if args.distributed:
+                print("Distributed")
+                print("  World size     :", args.world_size)
+                print("  Local rank     :", args.local_rank)
+                print("  Is master      :", args.is_master)
 
         # model training
         runner = SupervisedRunner(input_key=INPUT_IMAGE_KEY, output_key=None, device="cuda")
