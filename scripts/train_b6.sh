@@ -19,4 +19,4 @@ python -m torch.distributed.launch --nproc_per_node=4 fit_predict.py -w 6 --fp16
   -l4 bce 0.5\
   -l8 bce 0.25\
   -l16 bce 0.125\
-  --transfer /home/bloodaxe/develop/Catalyst-Inria-Segmentation-Example/runs/200831_11_01_b6_unet32_s2_rdtc_fp16/main/checkpoints_optimized_jaccard/best.pth
+  --transfer /home/bloodaxe/develop/Catalyst-Inria-Segmentation-Example/runs/200830_23_50_b6_unet32_s2_bi_fp16_local_rank_0/200830_23_50_b6_unet32_s2_bi_fp16_local_rank_0.pth

@@ -1,3 +1,5 @@
+import math
+import warnings
 from typing import List, Union, Type
 import torch
 from pytorch_toolbelt.modules.encoders import _take
@@ -9,6 +11,8 @@ from timm.models.efficientnet import (
     tf_efficientnet_b4_ns,
     tf_efficientnet_b6_ns,
     tf_efficientnet_b0_ns,
+    tf_efficientnet_b7_ns,
+    mixnet_xl
 )
 from timm.models import hrnet
 from timm.models.layers import Swish, Mish
@@ -20,6 +24,7 @@ __all__ = [
     "B2Encoder",
     "B4Encoder",
     "B6Encoder",
+    "B7Encoder",
     "HRNetW32Encoder",
     "NoStrideB2Encoder",
     "NoStrideB4Encoder",
@@ -28,6 +33,36 @@ __all__ = [
     "SWSLResNeXt101Encoder",
     "TResNetMEncoder",
 ]
+
+
+def make_n_channel_input_conv2d_same(conv: nn.Conv2d, in_channels: int, mode="auto"):
+    assert isinstance(conv, nn.Conv2d)
+    if conv.in_channels == in_channels:
+        warnings.warn("make_n_channel_input call is spurious")
+        return conv
+
+    new_conv = Conv2dSame(
+        in_channels,
+        out_channels=conv.out_channels,
+        kernel_size=conv.kernel_size,
+        stride=conv.stride,
+        padding=conv.padding,
+        dilation=conv.dilation,
+        groups=conv.groups,
+        bias=conv.bias is not None,
+    )
+
+    w = conv.weight
+    if in_channels > conv.in_channels:
+        n = math.ceil(in_channels / float(conv.in_channels))
+        w = torch.cat([w] * n, dim=1)
+        w = w[:, :in_channels, ...]
+        new_conv.weight = nn.Parameter(w, requires_grad=True)
+    else:
+        w = w[:, 0:in_channels, ...]
+        new_conv.weight = nn.Parameter(w, requires_grad=True)
+
+    return new_conv
 
 
 class B0Encoder(EncoderModule):
@@ -41,14 +76,14 @@ class B0Encoder(EncoderModule):
         return _take(features, self._layers)
 
     def change_input_channels(self, input_channels: int, mode="auto"):
-        self.encoder.conv_stem = make_n_channel_input(self.encoder.conv_stem, input_channels, mode)
+        self.encoder.conv_stem = make_n_channel_input_conv2d_same(self.encoder.conv_stem, input_channels, mode)
         return self
 
 
 class B2Encoder(EncoderModule):
-    def __init__(self, pretrained=True):
+    def __init__(self, pretrained=True, layers=[1, 2, 3, 4]):
         encoder = tf_efficientnet_b2_ns(pretrained=pretrained, features_only=True, drop_path_rate=0.1)
-        super().__init__([16, 24, 48, 120, 352], [2, 4, 8, 16, 32], [1, 2, 3, 4])
+        super().__init__([16, 24, 48, 120, 352], [2, 4, 8, 16, 32], layers)
         self.encoder = encoder
 
     def forward(self, x):
@@ -56,7 +91,7 @@ class B2Encoder(EncoderModule):
         return _take(features, self._layers)
 
     def change_input_channels(self, input_channels: int, mode="auto"):
-        self.encoder.conv_stem = make_n_channel_input(self.encoder.conv_stem, input_channels, mode)
+        self.encoder.conv_stem = make_n_channel_input_conv2d_same(self.encoder.conv_stem, input_channels, mode)
         return self
 
 
@@ -73,7 +108,7 @@ class B4Encoder(EncoderModule):
         return _take(features, self._layers)
 
     def change_input_channels(self, input_channels: int, mode="auto"):
-        self.encoder.conv_stem = make_n_channel_input(self.encoder.conv_stem, input_channels, mode)
+        self.encoder.conv_stem = make_n_channel_input_conv2d_same(self.encoder.conv_stem, input_channels, mode)
         return self
 
 
@@ -83,6 +118,38 @@ class B6Encoder(EncoderModule):
             pretrained=pretrained, features_only=True, act_layer=act_layer, drop_path_rate=0.2
         )
         super().__init__([32, 40, 72, 200, 576], [2, 4, 8, 16, 32], layers)
+        self.encoder = encoder
+
+    def forward(self, x):
+        features = self.encoder(x)
+        return _take(features, self._layers)
+
+    def change_input_channels(self, input_channels: int, mode="auto"):
+        self.encoder.conv_stem = make_n_channel_input_conv2d_same(self.encoder.conv_stem, input_channels, mode)
+        return self
+
+
+class B7Encoder(EncoderModule):
+    def __init__(self, pretrained=True, layers=[1, 2, 3, 4], act_layer=Swish):
+        encoder = tf_efficientnet_b7_ns(
+            pretrained=pretrained, features_only=True, act_layer=act_layer, drop_path_rate=0.2
+        )
+        super().__init__([32, 48, 80, 224, 640], [2, 4, 8, 16, 32], layers)
+        self.encoder = encoder
+
+    def forward(self, x):
+        features = self.encoder(x)
+        return _take(features, self._layers)
+
+    def change_input_channels(self, input_channels: int, mode="auto"):
+        self.encoder.conv_stem = make_n_channel_input(self.encoder.conv_stem, input_channels, mode)
+        return self
+
+
+class MixNetXLEncoder(EncoderModule):
+    def __init__(self, pretrained=True, layers=[1, 2, 3, 4], act_layer=Swish):
+        encoder = mixnet_xl(pretrained=pretrained, features_only=True, act_layer=act_layer, drop_path_rate=0.2)
+        super().__init__([40, 48, 64, 192, 320], [2, 4, 8, 16, 32], layers)
         self.encoder = encoder
 
     def forward(self, x):
