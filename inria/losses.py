@@ -8,11 +8,46 @@ from torch.nn import KLDivLoss
 
 from inria.dataset import INPUT_MASK_KEY, INPUT_MASK_WEIGHT_KEY
 
-__all__ = ["get_loss", "AdaptiveMaskLoss2d", "WeightedBCEWithLogits", "KLDivLossWithLogits"]
+__all__ = ["get_loss", "WeightedBCEWithLogits", "KLDivLossWithLogits"]
 
 
-class AdaptiveMaskLoss2d(nn.Module):
+class BinaryKLDivLossWithLogits(KLDivLoss):
     """
+    """
+
+    def __init__(self, ignore_index=None):
+        super().__init__()
+        self.ignore_index = ignore_index
+
+    def forward(self, input, target):
+        # Resize target to size of input
+        input_size = input.size()[2:]
+        target_size = target.size()[2:]
+        if input_size != target_size:
+            if self.ignore_index is not None:
+                raise ValueError("In case ignore_index is not None, input and output tensors must have equal size")
+            target = F.interpolate(target, size=input_size, mode="bilinear", align_corners=False)
+
+        if self.ignore_index is not None:
+            mask = target != self.ignore_index
+            input = input[mask]
+            target = target[mask]
+
+            if len(target) == 0:
+                return 0
+
+        input = torch.cat([input, 1 - input], dim=1)
+        log_p = F.logsigmoid(input)
+
+        target = torch.cat([target, 1 - target], dim=1)
+
+        loss = F.kl_div(log_p, target, reduction="mean")
+        return loss
+
+
+class ResizePredictionTarget2d(nn.Module):
+    """
+    Wrapper around loss, that rescale model output to target size
     """
 
     def __init__(self, loss):
@@ -20,14 +55,24 @@ class AdaptiveMaskLoss2d(nn.Module):
         self.loss = loss
 
     def forward(self, input, target):
+        input = F.interpolate(input, target.size()[2:], mode="bilinear", align_corners=False)
+        return self.loss(input, target)
 
-        # Resize target to size of input
-        target = F.interpolate(target, size=input.size()[2:], mode="bilinear", align_corners=False)
-        target = target.clamp(0, 1)
 
-        log_p = F.logsigmoid(input)
-        loss = F.kl_div(log_p, target, reduction="mean")
-        return loss
+class ResizeTargetToPrediction2d(nn.Module):
+    """
+    Wrapper around loss, that rescale target tensor to the size of output of the model.
+    Note: This will corrupt binary labels and not indended for multiclass case
+    """
+
+    def __init__(self, loss):
+        super().__init__()
+        self.loss = loss
+
+    def forward(self, input, target):
+        target = F.interpolate(target, input.size()[2:], mode="bilinear", align_corners=False)
+        return self.loss(input, target)
+
 
 
 class WeightedBCEWithLogits(nn.Module):

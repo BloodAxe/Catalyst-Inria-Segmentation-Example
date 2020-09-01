@@ -10,7 +10,7 @@ from .timm_encoders import B4Encoder, B0Encoder, B6Encoder
 from torch import nn, Tensor
 from torch.nn import functional as F
 
-from ..dataset import OUTPUT_MASK_KEY
+from ..dataset import OUTPUT_MASK_KEY, output_mask_name_for_stride
 from catalyst.registry import Model
 
 __all__ = [
@@ -43,6 +43,8 @@ class UnetSegmentationModel(nn.Module):
         full_size_mask=True,
         activation=ACT_RELU,
         upsample_block=nn.UpsamplingNearest2d,
+        need_supervision_masks=False,
+        last_upsample_block=None,
     ):
         super().__init__()
         self.encoder = encoder
@@ -55,9 +57,29 @@ class UnetSegmentationModel(nn.Module):
             upsample_block=upsample_block,
         )
 
-        self.mask = nn.Sequential(
-            OrderedDict([("drop", nn.Dropout2d(dropout)), ("conv", conv1x1(unet_channels[0], num_classes))])
-        )
+        if last_upsample_block is not None:
+            self.last_upsample_block = last_upsample_block(unet_channels[0])
+            self.mask = nn.Sequential(
+                OrderedDict(
+                    [
+                        ("drop", nn.Dropout2d(dropout)),
+                        ("conv", conv1x1(self.last_upsample_block.out_channels, num_classes)),
+                    ]
+                )
+            )
+        else:
+            self.last_upsample_block = None
+
+            self.mask = nn.Sequential(
+                OrderedDict([("drop", nn.Dropout2d(dropout)), ("conv", conv1x1(unet_channels[0], num_classes))])
+            )
+
+        if need_supervision_masks:
+            self.supervision = nn.ModuleList([conv1x1(channels, num_classes) for channels in self.decoder.channels])
+            self.supervision_names = [output_mask_name_for_stride(stride) for stride in self.encoder.strides]
+        else:
+            self.supervision = None
+            self.supervision_names = None
 
         self.full_size_mask = full_size_mask
 
@@ -67,12 +89,19 @@ class UnetSegmentationModel(nn.Module):
         x = self.decoder(x)
 
         # Decode mask
-        mask = self.mask(x[0])
-
-        if self.full_size_mask:
-            mask = F.interpolate(mask, size=x_size[2:], mode="bilinear", align_corners=False)
+        if self.last_upsample_block is not None:
+            mask = self.mask(self.last_upsample_block(x[0]))
+        else:
+            mask = self.mask(x[0])
+            if self.full_size_mask:
+                mask = F.interpolate(mask, size=x_size[2:], mode="bilinear", align_corners=False)
 
         output = {OUTPUT_MASK_KEY: mask}
+
+        if self.supervision is not None:
+            for feature_map, supervision, name in zip(x, self.supervision, self.supervision_names):
+                output[name] = supervision(feature_map)
+
         return output
 
 
@@ -270,7 +299,7 @@ def b6_unet32_s2_tc(input_channels=3, num_classes=1, dropout=0.2, pretrained=Tru
 
 
 @Model
-def b6_unet32_s2_rdtc(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):
+def b6_unet32_s2_rdtc(input_channels=3, num_classes=1, dropout=0.2, need_supervision_masks=False, pretrained=True):
     encoder = B6Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
@@ -283,5 +312,7 @@ def b6_unet32_s2_rdtc(input_channels=3, num_classes=1, dropout=0.2, pretrained=T
         unet_channels=[32, 64, 128, 256],
         activation=ACT_SWISH,
         dropout=dropout,
+        need_supervision_masks=need_supervision_masks,
         upsample_block=ResidualDeconvolutionUpsample2d,
+        last_upsample_block=ResidualDeconvolutionUpsample2d,
     )
