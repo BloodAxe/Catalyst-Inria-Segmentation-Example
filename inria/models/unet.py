@@ -6,10 +6,10 @@ from pytorch_toolbelt.modules import conv1x1, UnetBlock, ACT_RELU, ABN, ACT_SWIS
 from pytorch_toolbelt.modules import encoders as E
 from pytorch_toolbelt.modules.decoders import UNetDecoder
 from pytorch_toolbelt.modules.encoders import EncoderModule
-from .timm_encoders import B4Encoder, B0Encoder, B6Encoder
 from torch import nn, Tensor
 from torch.nn import functional as F
 
+from .timm_encoders import B4Encoder, B0Encoder, B6Encoder
 from ..dataset import OUTPUT_MASK_KEY, output_mask_name_for_stride
 from catalyst.registry import Model
 
