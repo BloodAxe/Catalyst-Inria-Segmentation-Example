@@ -527,19 +527,19 @@ def main():
         )
 
         # Training is finished. Let's run predictions using best checkpoint weights
-        best_checkpoint = os.path.join(log_dir, "main", "checkpoints", "best.pth")
+        if is_master:
+            best_checkpoint = os.path.join(log_dir, "main", "checkpoints", "best.pth")
 
-        model_checkpoint = os.path.join(log_dir, f"{checkpoint_prefix}.pth")
-        clean_checkpoint(best_checkpoint, model_checkpoint)
+            model_checkpoint = os.path.join(log_dir, f"{checkpoint_prefix}.pth")
+            clean_checkpoint(best_checkpoint, model_checkpoint)
 
-        unpack_checkpoint(torch.load(model_checkpoint), model=model)
+            unpack_checkpoint(torch.load(model_checkpoint), model=model)
 
-        mask = predict(model, read_inria_image("sample_color.jpg"), image_size=image_size, batch_size=args.batch_size)
-        mask = ((mask > 0) * 255).astype(np.uint8)
-        name = os.path.join(log_dir, "sample_color.jpg")
-        cv2.imwrite(name, mask)
+            mask = predict(model, read_inria_image("sample_color.jpg"), image_size=image_size, batch_size=args.batch_size)
+            mask = ((mask > 0) * 255).astype(np.uint8)
+            name = os.path.join(log_dir, "sample_color.jpg")
+            cv2.imwrite(name, mask)
 
-        del optimizer, loaders
 
 
 if __name__ == "__main__":
