@@ -9,7 +9,7 @@ from pytorch_toolbelt.modules.encoders import EncoderModule
 from torch import nn, Tensor
 from torch.nn import functional as F
 
-from .timm_encoders import B4Encoder, B0Encoder, B6Encoder
+from .timm_encoders import *
 from ..dataset import OUTPUT_MASK_KEY, output_mask_name_for_stride
 from catalyst.registry import Model
 
@@ -315,4 +315,19 @@ def b6_unet32_s2_rdtc(input_channels=3, num_classes=1, dropout=0.2, need_supervi
         need_supervision_masks=need_supervision_masks,
         upsample_block=ResidualDeconvolutionUpsample2d,
         last_upsample_block=ResidualDeconvolutionUpsample2d,
+    )
+
+@Model
+def mxxl_unet32_s1(input_channels=3, num_classes=1, dropout=0.5, pretrained=True, need_supervision_masks=False):
+    encoder = MixNetXLEncoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
+    if input_channels != 3:
+        encoder.change_input_channels(input_channels)
+
+    return UnetSegmentationModel(
+        encoder,
+        num_classes=num_classes,
+        unet_channels=[32, 64, 128, 256],
+        activation=ACT_SWISH,
+        dropout=dropout,
+        need_supervision_masks=need_supervision_masks,
     )

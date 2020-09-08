@@ -228,12 +228,16 @@ def main():
 
     is_master = args.is_master | (not args.distributed)
 
-    distributed_params = {}
     if args.distributed:
         distributed_params = {"rank": args.local_rank, "syncbn": True}
-
-    if args.fp16:
-        distributed_params["amp"] = True
+        if args.fp16:
+            distributed_params["amp"] = True
+    else:
+        if args.fp16:
+            distributed_params = {}
+            distributed_params["amp"] = True
+        else:
+            distributed_params = False
 
     set_manual_seed(args.seed + args.local_rank)
     catalyst.utils.set_global_seed(args.seed + args.local_rank)

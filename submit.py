@@ -39,7 +39,7 @@ def main():
     out_dir = os.path.join(run_dir, "submit")
     os.makedirs(out_dir, exist_ok=True)
 
-    model, checkpoint = model_from_checkpoint(checkpoint_file)
+    model, checkpoint = model_from_checkpoint(checkpoint_file, strict=False)
     threshold = checkpoint["epoch_metrics"].get("valid_optimized_jaccard/threshold", 0.5)
     print(report_checkpoint(checkpoint))
     print("Using threshold", threshold)
@@ -67,10 +67,10 @@ def main():
 
     model = model.eval()
 
-    mask = predict(model, read_inria_image("sample_color.jpg"), image_size=(512, 512), batch_size=args.batch_size * torch.cuda.device_count())
-    mask = ((mask > threshold) * 255).astype(np.uint8)
-    name = os.path.join(run_dir, "sample_color.jpg")
-    cv2.imwrite(name, mask)
+    # mask = predict(model, read_inria_image("sample_color.jpg"), image_size=(512, 512), batch_size=args.batch_size * torch.cuda.device_count())
+    # mask = ((mask > threshold) * 255).astype(np.uint8)
+    # name = os.path.join(run_dir, "sample_color.jpg")
+    # cv2.imwrite(name, mask)
 
     test_predictions_dir = os.path.join(out_dir, "test_predictions")
     test_predictions_dir_compressed = os.path.join(out_dir, "test_predictions_compressed")
@@ -84,16 +84,18 @@ def main():
 
     test_images = find_in_dir(os.path.join(data_dir, "test", "images"))
     for fname in tqdm(test_images, total=len(test_images)):
-        image = read_inria_image(fname)
-        mask = predict(model, image, image_size=(512, 512), batch_size=args.batch_size * torch.cuda.device_count())
-        mask = ((mask > threshold) * 255).astype(np.uint8)
-        name = os.path.join(test_predictions_dir, os.path.basename(fname))
-        cv2.imwrite(name, mask)
+        predicted_mask_fname = os.path.join(test_predictions_dir, os.path.basename(fname))
+
+        if not os.path.isfile(predicted_mask_fname):
+            image = read_inria_image(fname)
+            mask = predict(model, image, image_size=(512, 512), batch_size=args.batch_size * torch.cuda.device_count())
+            mask = ((mask > threshold) * 255).astype(np.uint8)
+            cv2.imwrite(predicted_mask_fname, mask)
 
         name_compressed = os.path.join(test_predictions_dir_compressed, os.path.basename(fname))
         command = (
             "gdal_translate --config GDAL_PAM_ENABLED NO -co COMPRESS=CCITTFAX4 -co NBITS=1 "
-            + name
+            + predicted_mask_fname
             + " "
             + name_compressed
         )
