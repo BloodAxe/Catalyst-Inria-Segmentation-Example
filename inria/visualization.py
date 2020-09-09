@@ -17,6 +17,8 @@ from inria.dataset import (
 def draw_inria_predictions(
     input: dict,
     output: dict,
+    inputs_to_labels:Callable,
+    outputs_to_labels: Callable,
     image_key="features",
     image_id_key: Optional[str] = "image_id",
     targets_key="targets",
@@ -25,7 +27,6 @@ def draw_inria_predictions(
     std=(0.229, 0.224, 0.225),
     max_images=None,
     targets_threshold=0.5,
-    logits_threshold=0,
     image_format: Union[str, Callable] = "bgr",
 ) -> List[np.ndarray]:
     """
@@ -58,7 +59,7 @@ def draw_inria_predictions(
     if max_images is not None:
         num_samples = min(num_samples, max_images)
 
-    assert output[outputs_key].size(1) == 1, "Mask must be single-channel tensor of shape [Nx1xHxW]"
+    #assert output[outputs_key].size(1) == 1, "Mask must be single-channel tensor of shape [Nx1xHxW]"
 
     for i in range(num_samples):
         image = rgb_image_from_tensor(input[image_key][i], mean, std)
@@ -70,12 +71,12 @@ def draw_inria_predictions(
         elif hasattr(image_format, "__call__"):
             image = image_format(image)
 
-        target = to_numpy(input[targets_key][i]).squeeze(0)
-        logits = to_numpy(output[outputs_key][i]).squeeze(0)
+        target = to_numpy(input[targets_key][i])
+        logits = to_numpy(output[outputs_key][i])
 
         overlay = image.copy()
-        true_mask = target > targets_threshold
-        pred_mask = logits > logits_threshold
+        true_mask = inputs_to_labels(target) == 1
+        pred_mask = outputs_to_labels(logits) == 1
 
         overlay[true_mask & pred_mask] = np.array(
             [0, 250, 0], dtype=overlay.dtype

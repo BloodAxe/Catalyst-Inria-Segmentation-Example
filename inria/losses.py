@@ -132,6 +132,9 @@ def get_loss(loss_name: str, ignore_index=None):
     if loss_name.lower() == "bce":
         return SoftBCEWithLogitsLoss(ignore_index=ignore_index)
 
+    if loss_name.lower() == "ce":
+        return nn.CrossEntropyLoss()
+
     if loss_name.lower() == "wbce":
         return WeightedBCEWithLogits(
             mask_key=INPUT_MASK_KEY, weight_key=INPUT_MASK_WEIGHT_KEY, ignore_index=ignore_index

@@ -94,6 +94,43 @@ def compute_weight_mask(mask: np.ndarray, edge_weight=4) -> np.ndarray:
     return weight_mask
 
 
+def mask2depth(mask: np.ndarray):
+    """
+    Take binary mask image and convert it to mask with stride 2 whether each pixel has 16 classes
+    :param mask:
+    :return:
+    """
+    mask = (mask > 0).astype(np.uint8)
+    mask = mask.reshape((mask.shape[0] // 2, 2, mask.shape[1] // 2, 2))
+    mask = np.transpose(mask, (0, 2, 1, 3))  # [R/2, C/2, 2,2]
+    mask = mask.reshape((mask.shape[0], mask.shape[1], 4))
+    mask = np.packbits(mask, axis=-1, bitorder="little")
+    return mask.squeeze(-1)
+
+
+def depth2mask(mask: np.ndarray):
+    mask = mask.reshape((mask.shape[0], mask.shape[1], 1))
+    mask = np.unpackbits(mask.astype(np.uint8), axis=-1, count=4, bitorder="little")
+    mask = mask.reshape((mask.shape[0], mask.shape[1], 2, 2))
+    mask = np.transpose(mask, (0, 2, 1, 3))
+    mask = mask.reshape((mask.shape[0] * 2, mask.shape[2] * 2))
+    return mask
+
+
+def decode_depth_mask(mask: np.ndarray):
+    mask = np.argmax(mask, axis=0)
+    return depth2mask(mask)
+
+
+def mask_to_bce_target(mask):
+    return tensor_from_mask_image(mask).float()
+
+
+def mask_to_ce_target(mask):
+    mask = mask2depth(mask)
+    return torch.from_numpy(mask).long()
+
+
 class InriaImageMaskDataset(Dataset, PseudolabelDatasetMixin):
     def __init__(
         self,
@@ -104,6 +141,7 @@ class InriaImageMaskDataset(Dataset, PseudolabelDatasetMixin):
         mask_loader=read_inria_mask,
         need_weight_mask=False,
         image_ids=None,
+        make_mask_target_fn: Callable = mask_to_bce_target,
     ):
         if mask_filenames is not None and len(image_filenames) != len(mask_filenames):
             raise ValueError("Number of images does not corresponds to number of targets")
@@ -117,6 +155,7 @@ class InriaImageMaskDataset(Dataset, PseudolabelDatasetMixin):
         self.get_mask = mask_loader
 
         self.transform = transform
+        self.make_mask_target_fn = make_mask_target_fn
 
     def __len__(self):
         return len(self.images)
@@ -141,7 +180,7 @@ class InriaImageMaskDataset(Dataset, PseudolabelDatasetMixin):
             INPUT_IMAGE_KEY: tensor_from_rgb_image(data["image"]),
             INPUT_IMAGE_ID_KEY: self.image_ids[index],
             INPUT_INDEX_KEY: index,
-            INPUT_MASK_KEY: tensor_from_mask_image(data["mask"]).float(),
+            INPUT_MASK_KEY: self.make_mask_target_fn(data["mask"]),
         }
 
         if self.need_weight_mask:
@@ -164,6 +203,7 @@ class _InrialTiledImageMaskDataset(Dataset):
         target_shape=None,
         need_weight_mask=False,
         keep_in_mem=False,
+        make_mask_target_fn: Callable = mask_to_bce_target,
     ):
         self.image_fname = image_fname
         self.mask_fname = mask_fname
@@ -188,6 +228,7 @@ class _InrialTiledImageMaskDataset(Dataset):
         self.transform = transform
         self.image_ids = [fs.id_from_fname(image_fname)] * len(self.slicer.crops)
         self.crop_coords_str = [f"[{crop[0]};{crop[1]};{crop[2]};{crop[3]};]" for crop in self.slicer.crops]
+        self.make_mask_target_fn = make_mask_target_fn
 
     def _get_image(self, index):
         image = self.image_loader(self.image_fname)
@@ -212,7 +253,7 @@ class _InrialTiledImageMaskDataset(Dataset):
 
         data = {
             INPUT_IMAGE_KEY: tensor_from_rgb_image(image),
-            INPUT_MASK_KEY: tensor_from_mask_image(mask).float(),
+            INPUT_MASK_KEY: self.make_mask_target_fn(mask),
             INPUT_IMAGE_ID_KEY: self.image_ids[index],
             "crop_coords": self.crop_coords_str[index],
         }
@@ -254,6 +295,7 @@ def get_datasets(
     fast=False,
     buildings_only=True,
     need_weight_mask=False,
+    make_mask_target_fn: Callable = mask_to_bce_target,
 ) -> Tuple[Dataset, Dataset, Optional[WeightedRandomSampler]]:
     """
     Create train and validation data loaders
@@ -305,7 +347,7 @@ def get_datasets(
         train_transform = A.Compose([train_crop] + train_augmentation + [normalize])
 
         trainset = InriaImageMaskDataset(
-            train_img, train_mask, need_weight_mask=need_weight_mask, transform=train_transform
+            train_img, train_mask, need_weight_mask=need_weight_mask, transform=train_transform, make_mask_target_fn=make_mask_target_fn
         )
 
         num_train_samples = int(len(trainset) * (5000 * 5000) / (image_size[0] * image_size[1]))
@@ -324,6 +366,7 @@ def get_datasets(
             tile_step=image_size,
             target_shape=(5000, 5000),
             need_weight_mask=need_weight_mask,
+            make_mask_target_fn=make_mask_target_fn
         )
 
     elif train_mode == "tiles":
@@ -352,6 +395,7 @@ def get_datasets(
             image_ids=train_img_ids,
             need_weight_mask=need_weight_mask,
             transform=train_transform,
+            make_mask_target_fn=make_mask_target_fn
         )
 
         valid_data = []
@@ -362,6 +406,10 @@ def get_datasets(
         valid_img = [os.path.join(data_dir, "train", "images", f"{fname}.tif") for fname in valid_data]
         valid_mask = [os.path.join(data_dir, "train", "gt", f"{fname}.tif") for fname in valid_data]
 
+        if fast:
+            valid_img = valid_img[0:1]
+            valid_mask = valid_mask[0:1]
+
         validset = InrialTiledImageMaskDataset(
             valid_img,
             valid_mask,
@@ -371,6 +419,7 @@ def get_datasets(
             tile_step=image_size,
             target_shape=(5000, 5000),
             need_weight_mask=need_weight_mask,
+            make_mask_target_fn=make_mask_target_fn
         )
 
         train_sampler = None

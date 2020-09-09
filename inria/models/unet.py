@@ -254,13 +254,13 @@ def b4_unet32_s2(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):
 
 
 @Model
-def b6_unet32_s2(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):
+def b6_unet32_s2(input_channels=3, num_classes=1, dropout=0.2, full_size_mask=True, pretrained=True):
     encoder = B6Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
     return UnetSegmentationModel(
-        encoder, num_classes=num_classes, unet_channels=[32, 64, 128, 256], activation=ACT_SWISH, dropout=dropout
+        encoder, num_classes=num_classes, unet_channels=[32, 64, 128, 256], activation=ACT_SWISH, dropout=dropout, full_size_mask=full_size_mask
     )
 
 
@@ -316,6 +316,7 @@ def b6_unet32_s2_rdtc(input_channels=3, num_classes=1, dropout=0.2, need_supervi
         upsample_block=ResidualDeconvolutionUpsample2d,
         last_upsample_block=ResidualDeconvolutionUpsample2d,
     )
+
 
 @Model
 def mxxl_unet32_s1(input_channels=3, num_classes=1, dropout=0.5, pretrained=True, need_supervision_masks=False):

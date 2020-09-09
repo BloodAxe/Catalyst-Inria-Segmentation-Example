@@ -1,4 +1,5 @@
 from collections import defaultdict
+from typing import Callable
 
 import numpy as np
 import torch
@@ -19,11 +20,13 @@ class JaccardMetricPerImage(Callback):
     """
 
     def __init__(
-            self,
-            input_key: str = "targets",
-            output_key: str = "logits",
-            image_id_key: str = "image_id",
-            prefix: str = "jaccard",
+        self,
+        inputs_to_labels: Callable,
+        outputs_to_labels: Callable,
+        input_key: str = "targets",
+        output_key: str = "logits",
+        image_id_key: str = "image_id",
+        prefix: str = "jaccard",
     ):
         super().__init__(CallbackOrder.Metric, CallbackNode.All)
         """
@@ -36,29 +39,28 @@ class JaccardMetricPerImage(Callback):
         self.image_id_key = image_id_key
         self.scores_per_image = {}
         self.locations = ["austin", "chicago", "kitsap", "tyrol-w", "vienna"]
+        self.inputs_to_labels = inputs_to_labels
+        self.outputs_to_labels = outputs_to_labels
 
     def on_loader_start(self, state):
         self.scores_per_image = {}
 
     def on_batch_end(self, runner: IRunner):
         image_ids = runner.input[self.image_id_key]
-        outputs = runner.output[self.output_key].detach()
-        targets = runner.input[self.input_key].detach()
+        outputs = to_numpy(runner.output[self.output_key].detach())
+        targets = to_numpy(runner.input[self.input_key].detach())
 
-        # Flatten images for easy computing IoU
-        outputs = outputs.view(outputs.size(0), -1)
-        targets = targets.view(targets.size(0), -1)
-
-        # Binarize outputs as we don't want to compute soft-jaccard
-        outputs = (outputs > 0).float()
-
-        intersection = torch.sum(targets * outputs, dim=1)
-        union = torch.sum(targets, dim=1) + torch.sum(outputs, dim=1)
-        for img_id, img_intersection, img_union in zip(image_ids, intersection, union):
+        for img_id, y_true, y_pred in zip(image_ids, targets, outputs):
             if img_id not in self.scores_per_image:
                 self.scores_per_image[img_id] = {"intersection": 0, "union": 0}
-            self.scores_per_image[img_id]["intersection"] += float(img_intersection)
-            self.scores_per_image[img_id]["union"] += float(img_union)
+
+            y_true_labels = self.inputs_to_labels(y_true)
+            y_pred_labels = self.outputs_to_labels(y_pred)
+            intersection = (y_true_labels * y_pred_labels).sum()
+            union = y_true_labels.sum() + y_pred_labels.sum() - intersection
+
+            self.scores_per_image[img_id]["intersection"] += float(intersection)
+            self.scores_per_image[img_id]["union"] += float(union)
 
     def on_loader_end(self, runner: IRunner):
         # Gather statistics from all nodes
@@ -76,7 +78,7 @@ class JaccardMetricPerImage(Callback):
         for image_id, values in all_scores_per_image.items():
             intersection = values["intersection"]
             union = values["union"]
-            metric = intersection / (union - intersection + eps)
+            metric = intersection / (union + eps)
             ious_per_image.append(metric)
 
             for location in self.locations:
@@ -96,11 +98,11 @@ class JaccardMetricPerImageWithOptimalThreshold(Callback):
     """
 
     def __init__(
-            self,
-            input_key: str = "targets",
-            output_key: str = "logits",
-            image_id_key: str = "image_id",
-            prefix: str = "optimal_threshold",
+        self,
+        input_key: str = "targets",
+        output_key: str = "logits",
+        image_id_key: str = "image_id",
+        prefix: str = "optimal_threshold",
     ):
         super().__init__(CallbackOrder.Metric)
         """
