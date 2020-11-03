@@ -10,7 +10,7 @@ from PIL import Image
 from pytorch_toolbelt.inference.tiles import ImageSlicer
 from pytorch_toolbelt.utils import fs
 from pytorch_toolbelt.utils.catalyst import PseudolabelDatasetMixin
-from pytorch_toolbelt.utils.torch_utils import tensor_from_rgb_image, tensor_from_mask_image
+from pytorch_toolbelt.utils.torch_utils import tensor_from_rgb_image, tensor_from_mask_image, image_to_tensor
 from scipy.ndimage import binary_dilation, binary_erosion
 from torch.utils.data import WeightedRandomSampler, Dataset, ConcatDataset
 
@@ -35,6 +35,14 @@ OUTPUT_MASK_4_KEY = output_mask_name_for_stride(4)
 OUTPUT_MASK_8_KEY = output_mask_name_for_stride(8)
 OUTPUT_MASK_16_KEY = output_mask_name_for_stride(16)
 OUTPUT_MASK_32_KEY = output_mask_name_for_stride(32)
+OUTPUT_MASK_64_KEY = output_mask_name_for_stride(64)
+
+OUTPUT_DSV_MASK_1_KEY = "output_dsv_mask_1"
+OUTPUT_DSV_MASK_2_KEY = "output_dsv_mask_2"
+OUTPUT_DSV_MASK_3_KEY = "output_dsv_mask_3"
+OUTPUT_DSV_MASK_4_KEY = "output_dsv_mask_4"
+OUTPUT_DSV_MASK_5_KEY = "output_dsv_mask_5"
+OUTPUT_DSV_MASK_6_KEY = "output_dsv_mask_6"
 
 
 OUTPUT_CLASS_KEY = "pred_classes"
@@ -123,7 +131,7 @@ def decode_depth_mask(mask: np.ndarray):
 
 
 def mask_to_bce_target(mask):
-    return tensor_from_mask_image(mask).float()
+    return image_to_tensor(mask).float()
 
 
 def mask_to_ce_target(mask):
@@ -177,7 +185,7 @@ class InriaImageMaskDataset(Dataset, PseudolabelDatasetMixin):
         data = self.transform(image=image, mask=mask)
 
         sample = {
-            INPUT_IMAGE_KEY: tensor_from_rgb_image(data["image"]),
+            INPUT_IMAGE_KEY: image_to_tensor(data["image"]),
             INPUT_IMAGE_ID_KEY: self.image_ids[index],
             INPUT_INDEX_KEY: index,
             INPUT_MASK_KEY: self.make_mask_target_fn(data["mask"]),
@@ -347,7 +355,11 @@ def get_datasets(
         train_transform = A.Compose([train_crop] + train_augmentation + [normalize])
 
         trainset = InriaImageMaskDataset(
-            train_img, train_mask, need_weight_mask=need_weight_mask, transform=train_transform, make_mask_target_fn=make_mask_target_fn
+            train_img,
+            train_mask,
+            need_weight_mask=need_weight_mask,
+            transform=train_transform,
+            make_mask_target_fn=make_mask_target_fn,
         )
 
         num_train_samples = int(len(trainset) * (5000 * 5000) / (image_size[0] * image_size[1]))
@@ -366,7 +378,7 @@ def get_datasets(
             tile_step=image_size,
             target_shape=(5000, 5000),
             need_weight_mask=need_weight_mask,
-            make_mask_target_fn=make_mask_target_fn
+            make_mask_target_fn=make_mask_target_fn,
         )
 
     elif train_mode == "tiles":
@@ -395,7 +407,7 @@ def get_datasets(
             image_ids=train_img_ids,
             need_weight_mask=need_weight_mask,
             transform=train_transform,
-            make_mask_target_fn=make_mask_target_fn
+            make_mask_target_fn=make_mask_target_fn,
         )
 
         valid_data = []
@@ -419,7 +431,7 @@ def get_datasets(
             tile_step=image_size,
             target_shape=(5000, 5000),
             need_weight_mask=need_weight_mask,
-            make_mask_target_fn=make_mask_target_fn
+            make_mask_target_fn=make_mask_target_fn,
         )
 
         train_sampler = None

@@ -55,6 +55,12 @@ from inria.dataset import (
     get_xview2_extra_dataset,
     INPUT_MASK_WEIGHT_KEY,
     OUTPUT_MASK_2_KEY,
+    OUTPUT_DSV_MASK_1_KEY,
+    OUTPUT_DSV_MASK_2_KEY,
+    OUTPUT_DSV_MASK_3_KEY,
+    OUTPUT_DSV_MASK_4_KEY,
+    OUTPUT_DSV_MASK_5_KEY,
+    OUTPUT_DSV_MASK_6_KEY,
 )
 from inria.factory import predict
 from inria.losses import get_loss, ResizeTargetToPrediction2d
@@ -68,6 +74,12 @@ from inria.visualization import draw_inria_predictions
 
 def get_criterions(
     criterions,
+    criterions_stride1_dsv1=None,
+    criterions_stride1_dsv2=None,
+    criterions_stride1_dsv3=None,
+    criterions_stride1_dsv4=None,
+    criterions_stride1_dsv5=None,
+    criterions_stride1_dsv6=None,
     criterions_stride2=None,
     criterions_stride4=None,
     criterions_stride8=None,
@@ -92,6 +104,40 @@ def get_criterions(
         callbacks.append(criterion_callback)
         losses.append(criterion_callback.prefix)
         print("Using loss", loss_name, loss_weight)
+
+    for supervision_losses, supervision_output in zip(
+        [
+            criterions_stride1_dsv1,
+            criterions_stride1_dsv2,
+            criterions_stride1_dsv3,
+            criterions_stride1_dsv4,
+            criterions_stride1_dsv5,
+            criterions_stride1_dsv6,
+        ],
+        [
+            OUTPUT_DSV_MASK_1_KEY,
+            OUTPUT_DSV_MASK_2_KEY,
+            OUTPUT_DSV_MASK_3_KEY,
+            OUTPUT_DSV_MASK_4_KEY,
+            OUTPUT_DSV_MASK_5_KEY,
+            OUTPUT_DSV_MASK_6_KEY,
+        ],
+    ):
+        if supervision_losses is not None:
+            for loss_name, loss_weight in supervision_losses:
+                prefix = f"{supervision_output}/" + loss_name
+                criterion_callback = CriterionCallback(
+                    prefix=prefix,
+                    input_key=INPUT_MASK_KEY if loss_name != "wbce" else [INPUT_MASK_KEY, INPUT_MASK_WEIGHT_KEY],
+                    output_key=supervision_output,
+                    criterion_key=prefix,
+                    multiplier=float(loss_weight),
+                )
+
+                criterions_dict[criterion_callback.criterion_key] = get_loss(loss_name, ignore_index=ignore_index)
+                callbacks.append(criterion_callback)
+                losses.append(criterion_callback.prefix)
+                print("Using loss", loss_name, loss_weight)
 
     # Additional supervision losses
     for supervision_losses, supervision_output in zip(
@@ -464,8 +510,23 @@ def main():
             valid_ds, batch_size=batch_size, num_workers=num_workers, pin_memory=True, sampler=valid_sampler
         )
 
+        if model_name in {"U2NETP", "U2NET"}:
+            dsv_criterions = criterions
+        else:
+            dsv_criterions = None
+
         loss_callbacks, loss_criterions = get_criterions(
-            criterions, criterions2, criterions4, criterions8, criterions16
+            criterions=criterions,
+            criterions_stride1_dsv1=dsv_criterions,
+            criterions_stride1_dsv2=dsv_criterions,
+            criterions_stride1_dsv3=dsv_criterions,
+            criterions_stride1_dsv4=dsv_criterions,
+            criterions_stride1_dsv5=dsv_criterions,
+            criterions_stride1_dsv6=dsv_criterions,
+            criterions_stride2=criterions2,
+            criterions_stride4=criterions4,
+            criterions_stride8=criterions8,
+            criterions_stride16=criterions16,
         )
         callbacks += loss_callbacks
 
@@ -539,11 +600,12 @@ def main():
 
             unpack_checkpoint(torch.load(model_checkpoint), model=model)
 
-            mask = predict(model, read_inria_image("sample_color.jpg"), image_size=image_size, batch_size=args.batch_size)
+            mask = predict(
+                model, read_inria_image("sample_color.jpg"), image_size=image_size, batch_size=args.batch_size
+            )
             mask = ((mask > 0) * 255).astype(np.uint8)
             name = os.path.join(log_dir, "sample_color.jpg")
             cv2.imwrite(name, mask)
-
 
 
 if __name__ == "__main__":
