@@ -365,9 +365,9 @@ class U2NET(nn.Module):
         self.side6 = nn.Conv2d(512, num_classes, 3, padding=1)
 
         self.outconv = nn.Conv2d(6, num_classes, 1)
-        if pretrained:
-            state_dict = torch.load(os.path.join(os.path.dirname(__file__), "u2net.pth"))
-            self.load_state_dict(state_dict)
+        # if pretrained:
+        #     state_dict = torch.load(os.path.join(os.path.dirname(__file__), "u2net.pth"))
+        #     self.load_state_dict(state_dict)
 
     def forward(self, x):
 
