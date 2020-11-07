@@ -192,7 +192,7 @@ class InriaImageMaskDataset(Dataset, PseudolabelDatasetMixin):
         }
 
         if self.need_weight_mask:
-            sample[INPUT_MASK_WEIGHT_KEY] = tensor_from_mask_image(compute_weight_mask(data["mask"])).float()
+            sample[INPUT_MASK_WEIGHT_KEY] = image_to_tensor(compute_weight_mask(data["mask"])).float()
 
         return sample
 
@@ -260,7 +260,7 @@ class _InrialTiledImageMaskDataset(Dataset):
         mask = data["mask"]
 
         data = {
-            INPUT_IMAGE_KEY: tensor_from_rgb_image(image),
+            INPUT_IMAGE_KEY: image_to_tensor(image),
             INPUT_MASK_KEY: self.make_mask_target_fn(mask),
             INPUT_IMAGE_ID_KEY: self.image_ids[index],
             "crop_coords": self.crop_coords_str[index],
