@@ -397,6 +397,8 @@ def main():
         if show:
             visualize_inria_predictions = partial(
                 draw_inria_predictions,
+                inputs_to_labels=lambda x: x.ge(0.5).long(),
+                outputs_to_labels=lambda x: x.float().get(0.5).long(),
                 image_key=INPUT_IMAGE_KEY,
                 image_id_key=INPUT_IMAGE_ID_KEY,
                 targets_key=INPUT_MASK_KEY,
