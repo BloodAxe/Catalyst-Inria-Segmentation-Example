@@ -58,7 +58,8 @@ def draw_inria_predictions(
     if max_images is not None:
         num_samples = min(num_samples, max_images)
 
-    #assert output[outputs_key].size(1) == 1, "Mask must be single-channel tensor of shape [Nx1xHxW]"
+    true_masks = to_numpy(inputs_to_labels(input[targets_key])).astype(bool)
+    pred_masks = to_numpy(outputs_to_labels(output[outputs_key])).astype(bool)
 
     for i in range(num_samples):
         image = rgb_image_from_tensor(input[image_key][i], mean, std)
@@ -70,12 +71,9 @@ def draw_inria_predictions(
         elif hasattr(image_format, "__call__"):
             image = image_format(image)
 
-        target = to_numpy(input[targets_key][i])
-        logits = to_numpy(output[outputs_key][i])
-
         overlay = image.copy()
-        true_mask = inputs_to_labels(target) == 1
-        pred_mask = outputs_to_labels(logits) == 1
+        true_mask = true_masks[i]
+        pred_mask = pred_masks[i]
 
         overlay[true_mask & pred_mask] = np.array(
             [0, 250, 0], dtype=overlay.dtype
