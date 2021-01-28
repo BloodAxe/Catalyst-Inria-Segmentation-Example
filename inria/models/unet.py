@@ -1,15 +1,14 @@
 from collections import OrderedDict
 from functools import partial
-from typing import Union, List, Dict
+from typing import Union, List, Dict, Type
 
-from pytorch_toolbelt.modules import conv1x1, UnetBlock, ACT_RELU, ABN, ACT_SWISH
+from pytorch_toolbelt.modules import conv1x1, UnetBlock, ACT_RELU, ABN, ACT_SWISH, ResidualDeconvolutionUpsample2d
 from pytorch_toolbelt.modules import encoders as E
 from pytorch_toolbelt.modules.decoders import UNetDecoder
 from pytorch_toolbelt.modules.encoders import EncoderModule
 from torch import nn, Tensor
 from torch.nn import functional as F
 
-from .timm_encoders import *
 from ..dataset import OUTPUT_MASK_KEY, output_mask_name_for_stride
 from catalyst.registry import Model
 
@@ -42,7 +41,7 @@ class UnetSegmentationModel(nn.Module):
         dropout=0.25,
         full_size_mask=True,
         activation=ACT_RELU,
-        upsample_block=nn.UpsamplingNearest2d,
+        upsample_block: Union[Type[nn.Upsample], Type[ResidualDeconvolutionUpsample2d]] = nn.UpsamplingNearest2d,
         need_supervision_masks=False,
         last_upsample_block=None,
     ):
@@ -222,7 +221,7 @@ def hrnet48_unet32(input_channels=3, num_classes=1, dropout=0.0, pretrained=True
 # B0-Unet
 @Model
 def b0_unet32_s2(input_channels=3, num_classes=1, dropout=0.1, pretrained=True):
-    encoder = B0Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
+    encoder = E.B0Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
@@ -233,7 +232,7 @@ def b0_unet32_s2(input_channels=3, num_classes=1, dropout=0.1, pretrained=True):
 
 @Model
 def b4_unet32(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):
-    encoder = B4Encoder(pretrained=pretrained)
+    encoder = E.B4Encoder(pretrained=pretrained)
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
@@ -244,7 +243,7 @@ def b4_unet32(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):
 
 @Model
 def b4_unet32_s2(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):
-    encoder = B4Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
+    encoder = E.B4Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
@@ -255,18 +254,23 @@ def b4_unet32_s2(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):
 
 @Model
 def b6_unet32_s2(input_channels=3, num_classes=1, dropout=0.2, full_size_mask=True, pretrained=True):
-    encoder = B6Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
+    encoder = E.B6Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
     return UnetSegmentationModel(
-        encoder, num_classes=num_classes, unet_channels=[32, 64, 128, 256], activation=ACT_SWISH, dropout=dropout, full_size_mask=full_size_mask
+        encoder,
+        num_classes=num_classes,
+        unet_channels=[32, 64, 128, 256],
+        activation=ACT_SWISH,
+        dropout=dropout,
+        full_size_mask=full_size_mask,
     )
 
 
 @Model
 def b6_unet32_s2_bi(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):
-    encoder = B6Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
+    encoder = E.B6Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
@@ -282,7 +286,7 @@ def b6_unet32_s2_bi(input_channels=3, num_classes=1, dropout=0.2, pretrained=Tru
 
 @Model
 def b6_unet32_s2_tc(input_channels=3, num_classes=1, dropout=0.2, pretrained=True):
-    encoder = B6Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
+    encoder = E.B6Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
@@ -300,7 +304,7 @@ def b6_unet32_s2_tc(input_channels=3, num_classes=1, dropout=0.2, pretrained=Tru
 
 @Model
 def b6_unet32_s2_rdtc(input_channels=3, num_classes=1, dropout=0.2, need_supervision_masks=False, pretrained=True):
-    encoder = B6Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
+    encoder = E.B6Encoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
@@ -320,7 +324,7 @@ def b6_unet32_s2_rdtc(input_channels=3, num_classes=1, dropout=0.2, need_supervi
 
 @Model
 def mxxl_unet32_s1(input_channels=3, num_classes=1, dropout=0.5, pretrained=True, need_supervision_masks=False):
-    encoder = MixNetXLEncoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
+    encoder = E.MixNetXLEncoder(pretrained=pretrained, layers=[0, 1, 2, 3, 4])
     if input_channels != 3:
         encoder.change_input_channels(input_channels)
 
